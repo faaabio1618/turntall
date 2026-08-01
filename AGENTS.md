@@ -27,7 +27,8 @@ blocking dialog, and mobile browsers see a recommendation to use a desktop.
 
 - Svelte 5 for the page and editor-stage components.
 - Vite 8 for development and production builds.
-- Plain JavaScript ES modules; TypeScript is not currently configured.
+- TypeScript ES modules with a shared `tsconfig.json`; Svelte scripts use
+  `lang="ts"`.
 - Vitest with V8 coverage for pure logic.
 - FFmpeg WebAssembly for compatible in-memory operations and stream-copy cuts.
 - Mediabunny and native WebCodecs for streaming analysis and browser-native
@@ -50,13 +51,14 @@ npm run test:coverage
 npm run test:e2e
 npm run test:e2e:headed
 npm run test:e2e:production
+npm run typecheck
 npm run check:svelte
 npm run build
 npm run check
 ```
 
-`npm run check` is the normal completion gate. It runs all unit tests, Svelte
-diagnostics, and the production build.
+`npm run check` is the normal completion gate. It runs all unit tests,
+TypeScript diagnostics, Svelte diagnostics, and the production build.
 
 Node.js 24 is preferred through `.nvmrc`; Node.js 22.12 or newer is supported.
 
@@ -65,72 +67,63 @@ Node.js 24 is preferred through `.nvmrc`; Node.js 22.12 or newer is supported.
 ### Application shell
 
 - `index.html` contains metadata and the `#app` mount point.
-- `src/main.js` is intentionally small and mounts `src/App.svelte`.
-- `src/App.svelte` composes the page and imports `src/editor.js` from
-  `onMount`, after all required DOM elements exist.
-- `src/components/` contains the Svelte page structure:
-  - `Header.svelte`
-  - `SourcePanel.svelte`
-  - `VideoPanel.svelte`
-  - `SelectionPanel.svelte`
-  - `OutputOptionsPanel.svelte`
-  - `OutputPreviewPanel.svelte`
-  - `ResultPanel.svelte`
-  - `SeoFooter.svelte`
-  - `Dialogs.svelte`
+- `src/app/main.ts` is intentionally small and mounts `src/app/App.svelte`.
+- `src/app/App.svelte` composes the page and imports
+  `src/editor/controller.ts` from `onMount`, after all required DOM elements
+  exist.
+- `src/app/style.css` contains global application styling.
+- `src/components/layout/` contains the header and SEO footer.
+- `src/components/dialogs/` contains application dialogs.
+- `src/components/editor/` contains the editor composition and its panel
+  components under `panels/`.
 
 ### Editor controller
 
-`src/editor.js` is the browser-facing editor controller. It owns the current
-file, media metadata, object URLs, subject references, tracking session,
-preview state, conversion state, progress state, and event listeners.
+`src/editor/controller.ts` is the browser-facing editor controller. It owns
+the current file, media metadata, object URLs, subject references, tracking
+session, preview state, conversion state, progress state, and event listeners.
 
-The Svelte components currently provide stable markup while `editor.js`
-updates the mounted DOM directly. This is an intentional migration boundary.
-Do not let Svelte reactivity and `editor.js` simultaneously own the same DOM
-property. If migrating more state into Svelte, move one coherent feature at a
-time and remove the matching imperative writes and listeners.
+The Svelte components currently provide stable markup while
+`editor/controller.ts` updates the mounted DOM directly. This is an
+intentional migration boundary. Do not let Svelte reactivity and the controller
+simultaneously own the same DOM property. If migrating more state into Svelte,
+move one coherent feature at a time and remove the matching imperative writes
+and listeners.
 
-`src/ui.js` collects required elements and throws when a selector is missing.
-Element IDs, classes used by JavaScript, dialog values, form control values,
-and key `hidden` attributes are therefore application APIs, not incidental
-markup. When changing a component, search `src/editor.js`, `src/ui.js`, and the
-CSS before renaming or removing anything.
+`src/editor/ui.ts` collects required elements and throws when a selector is
+missing. Element IDs, classes used by JavaScript, dialog values, form control
+values, and key `hidden` attributes are therefore application APIs, not
+incidental markup. When changing a component, search
+`src/editor/controller.ts`, `src/editor/ui.ts`, and the CSS before renaming or
+removing anything.
 
 ### Framework-independent logic
 
 Keep media and geometry logic independent of Svelte and the DOM whenever
-possible:
+possible. The framework-independent modules are grouped by domain:
 
-- `browser-support.js`: Chrome detection.
-- `conversion-progress.js`: finalization/progress signaling.
-- `crop-trajectory.js`: 9:16 crop positions, interpolation, smoothing, and
-  FFmpeg crop expressions.
-- `editing-modes.js`: exact-cut and snapping mode rules.
-- `editor-history.js`: subject edit undo/redo snapshots.
-- `ffmpeg-commands.js`: FFmpeg argument construction.
-- `media-format.js`: probing, codecs, containers, warnings, and error copy.
-- `media-frame-scheduler.js`: decoded-frame callbacks with animation-frame
-  fallback.
-- `optical-flow-tracker.js`: point-flow tracking and tracker selection.
-- `output-preview.js`: preview canvas sizing and frame calculation.
-- `processing-steps.js`: processing step state.
-- `progress-estimate.js`: conversion progress and ETA calculation.
-- `scene-change.js`: frame-level scene change scoring.
-- `selection-summary.js`: selected-range validation and summary text.
-- `streaming-media.js`: large-file strategy and streaming analysis.
-- `subject-selection.js`: normalized box geometry, references, and jump rules.
-- `template-tracker.js`: template search, confidence, and timing.
-- `video-utils.js`: time, size, frame stepping, keyframes, and crop helpers.
-- `webcodecs-editor.js`: native browser conversion pipeline.
+- `src/platform/`: browser capability checks.
+- `src/media/`: probing, formats, streaming analysis, frame scheduling, and
+  shared video helpers.
+- `src/tracking/`: subject geometry, template and optical-flow tracking, scene
+  changes, and crop trajectories.
+- `src/processing/`: FFmpeg arguments, WebCodecs conversion, progress, and
+  processing-step state.
+- `src/editor/`: editing modes, history, selection summaries, output-preview
+  calculations, UI bindings, and the browser controller.
 
 Add or update focused Vitest coverage when changing these modules.
+
+Unit tests mirror the source domains under `tests/editor/`, `tests/media/`,
+`tests/tracking/`, `tests/processing/`, and `tests/platform/`. Keep new pure
+logic tests in the matching domain. Browser fixtures remain in
+`tests/fixtures/`, and complete Playwright workflows remain in `e2e/`.
 
 ## Media processing rules
 
 - Files at or below 1 GiB use the in-memory FFmpeg path when appropriate.
 - Files above 1 GiB must use the streaming path. The threshold is exported as
-  `MAX_WASM_INPUT_BYTES` in `src/streaming-media.js`.
+  `MAX_WASM_INPUT_BYTES` in `src/media/streaming-media.ts`.
 - Never read a multi-gigabyte input into one ArrayBuffer. FFmpeg Wasm has a
   32-bit address space and the virtual filesystem can create additional
   copies.
@@ -141,7 +134,7 @@ Add or update focused Vitest coverage when changing these modules.
   retained. Do not delete that code without explicit approval.
 - Vite serves `ffmpeg-core.js` and `ffmpeg-core.wasm` from `/ffmpeg/` and copies
   them into production output. Preserve the COOP/COEP and cross-origin resource
-  headers in `vite.config.js`.
+  headers in `vite.config.ts`.
 - Processing is cancellable. A change must preserve cancellation for both
   FFmpeg and WebCodecs conversions.
 - Processing progress has prepare, process, and finalize steps. Do not report
@@ -196,6 +189,11 @@ Preserve these unless the user explicitly asks for different behavior:
   must leave every reference intact.
 - Tracking speed `1x` is for fast-moving subjects; `6x` is for mostly steady
   subjects. Videos above 50 fps automatically recommend `6x`.
+- Automatic crop motion follows the original Python tracker: horizontally
+  smooth tracked samples with a Gaussian sigma of 5, apply a 15-source-pixel
+  movement deadband (scaled slightly for high-resolution video), then
+  interpolate between committed positions. Keep subject boxes untouched and
+  preserve manual positions and scene jumps exactly.
 - Spacebar activates the current primary orange tracking/selection action.
 
 ### Audio and speed
@@ -268,8 +266,9 @@ repository policy is explicitly changed.
 ## Known migration direction
 
 The Svelte component port is complete for the page structure, but much of the
-runtime UI state still lives in the imperative `src/editor.js` controller. Good
-future refactors include extracting coherent controllers or Svelte state for:
+runtime UI state still lives in the imperative `src/editor/controller.ts`.
+Good future refactors include extracting coherent controllers or Svelte state
+for:
 
 - source-file preparation and cleanup;
 - output preview playback;

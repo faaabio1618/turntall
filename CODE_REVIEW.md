@@ -12,8 +12,8 @@ combination was exercised.
 
 Validation performed:
 
-- `npm run test:coverage`: 192 tests passed with 96.62% statement coverage.
-- The current Playwright suites: 9 editor tests and 1 production-bundle test
+- `npm run test:coverage`: 200 tests passed with 96.46% statement coverage.
+- The current Playwright suites: 13 editor tests and 1 production-bundle test
   passed in Chrome.
 - A synthetic 30-minute tracking path with 3,001 references generated a
   184,656-character FFmpeg crop filter.
@@ -28,7 +28,7 @@ Validation performed:
 | High | The 1 GiB in-memory cutoff leaves too little headroom for FFmpeg Wasm | Open | High |
 | Medium | Large-file OPFS outputs can remain after reload or tab close | Open | High |
 | Medium | Large-file preparation cannot cancel its WebCodecs capability probe | Open | High |
-| Medium | Long tracking paths create very large filters and repeat trajectory work per frame | Open | High |
+| Medium | Long tracking paths can create large filters and repeat trajectory work per frame | Mitigated | High |
 | Medium | The audio fallback depends on private Mediabunny internals | Open | High |
 | Medium | Coverage and E2E gates omit several high-risk production paths | Resolved | High |
 | Low | The editor has no component teardown/remount lifecycle | Open | High |
@@ -47,11 +47,11 @@ Resolution (2026-08-01):
 
 Original evidence:
 
-- `src/editor.js:3206` resets the shared `cancelRequested` flag when a new cut
+- `src/editor/controller.ts:3206` resets the shared `cancelRequested` flag when a new cut
   starts.
-- `src/editor.js:3394` uses that shared flag to decide whether an older cut was
+- `src/editor/controller.ts:3394` uses that shared flag to decide whether an older cut was
   cancelled or failed.
-- `src/editor.js:3418` always unlocks the UI in the older cut's `finally` block.
+- `src/editor/controller.ts:3418` always unlocks the UI in the older cut's `finally` block.
 - The former Cancel handler terminated FFmpeg and immediately called
   `setBusy(false)` when Cancel was clicked.
 
@@ -84,9 +84,9 @@ Regression test:
 
 Evidence:
 
-- `src/streaming-media.js:5` routes files up to and including 1 GiB through the
+- `src/media/streaming-media.ts:5` routes files up to and including 1 GiB through the
   in-memory strategy.
-- `src/editor.js:2877-2879` first materializes the complete file with
+- `src/editor/controller.ts:2877-2879` first materializes the complete file with
   `arrayBuffer()` and then writes it into FFmpeg's virtual filesystem.
 
 A near-1 GiB input therefore needs roughly one GiB for the browser-side buffer
@@ -120,11 +120,11 @@ Regression test:
 
 Evidence:
 
-- `src/webcodecs-editor.js:165-189` writes disk-backed outputs to the browser's
+- `src/processing/webcodecs-editor.ts:165-189` writes disk-backed outputs to the browser's
   origin-private file system as `giftiger-output-*.mp4`.
-- `src/editor.js:3313` stores the returned cleanup callback.
-- `src/editor.js:2468-2479` runs it only when output is reset.
-- `src/editor.js:3829-3838` revokes object URLs on `beforeunload`, but does not
+- `src/editor/controller.ts:3313` stores the returned cleanup callback.
+- `src/editor/controller.ts:2468-2479` runs it only when output is reset.
+- `src/editor/controller.ts:3829-3838` revokes object URLs on `beforeunload`, but does not
   remove the OPFS file.
 
 If a user successfully processes a large video and then reloads or closes the
@@ -149,10 +149,10 @@ Regression test:
 
 Evidence:
 
-- `src/editor.js:2938-2949` passes cancellation into streaming packet analysis.
-- `src/editor.js:2969` then awaits `canEditWithWebCodecs()` without passing any
+- `src/editor/controller.ts:2938-2949` passes cancellation into streaming packet analysis.
+- `src/editor/controller.ts:2969` then awaits `canEditWithWebCodecs()` without passing any
   abort signal or revision callback.
-- `src/editor.js:3811-3812` returns early from the Cancel handler when no FFmpeg
+- `src/editor/controller.ts:3811-3812` returns early from the Cancel handler when no FFmpeg
   instance exists, leaving the editor locked until the probe finishes.
 
 Cancellation is checked while keyframes are scanned, but not while the browser
@@ -171,24 +171,30 @@ Regression test:
 - Delay the capability probe, cancel preparation, resolve the probe, and assert
   that no stale metadata is committed and the UI returns to an idle state.
 
-### 5. Medium — Tracking work grows poorly with clip length
+### 5. Mitigated — Tracking work can grow poorly with complex paths
+
+Mitigation (2026-08-01):
+
+- Automatic tracking samples are now passed through the original Python
+  tracker's Gaussian horizontal smoothing and movement deadband before they
+  become persistent crop references.
+- Sub-threshold jitter is collapsed while the final timestamp is retained, so
+  stored trajectories usually grow with meaningful camera movement instead of
+  clip duration.
+- Manual positions and explicit scene jumps bypass stabilization.
 
 Evidence:
 
-- `src/editor.js:181` stores an automatic reference approximately every 0.6
-  seconds.
-- `src/crop-trajectory.js:217-251` emits nested FFmpeg `if(...)` expressions
+- `src/tracking/crop-trajectory.ts:334-368` emits nested FFmpeg `if(...)` expressions
   for every trajectory point, for both horizontal and vertical positions.
-- `src/editor.js:410-461` rebuilds and sorts the full trajectory while drawing
+- `src/editor/controller.ts:413-464` rebuilds and sorts the full trajectory while drawing
   the live crop overlay.
-- `src/output-preview.js:35-65` also rebuilds it for every output-preview frame.
+- `src/editor/output-preview.ts:35-65` also rebuilds it for every output-preview frame.
 
-At the current reference interval, a 30-minute fully tracked clip has about
-3,001 references. In the local benchmark this generated a 184,656-character
-FFmpeg filter. The same reference list is repeatedly filtered, mapped, sorted,
-and smoothed during playback. The measured 0.79 ms trajectory rebuild excludes
-layout reads and frame drawing, so the total main-thread cost can be material
-at 30–60 fps.
+The original benchmark used a synthetic 30-minute path with 3,001 already
+committed references and generated a 184,656-character FFmpeg filter. Automatic
+paths are now normally simplified before reaching that stage, but manually
+dense or highly oscillating paths can still reproduce the underlying cost.
 
 Impact:
 
@@ -213,7 +219,7 @@ Regression test:
 
 Evidence:
 
-- `src/webcodecs-editor.js:136-160` accesses `conversion._trackPromises`,
+- `src/processing/webcodecs-editor.ts:136-160` accesses `conversion._trackPromises`,
   `conversion._started`, and `conversion._canceled` directly.
 
 The leading-underscore members are implementation details rather than a stable
@@ -232,7 +238,7 @@ Recommendation:
 
 Resolution (2026-08-01):
 
-- `vitest.config.js` now counts all framework-independent modules instead of a
+- `vitest.config.ts` now counts all framework-independent modules instead of a
   hand-picked subset.
 - Streaming analysis is covered at 100% of lines and WebCodecs conversion at
   97.58%, including disposal, packet-copied audio, failure, cancellation,
@@ -254,11 +260,11 @@ deterministic mocks so CI does not require a multi-gigabyte fixture.
 
 Evidence:
 
-- `src/App.svelte:8-10` dynamically imports the controller in `onMount()` but
+- `src/app/App.svelte:8-10` dynamically imports the controller in `onMount()` but
   returns no cleanup function.
-- `src/editor.js:3422-3826` installs many element/window listeners and two
+- `src/editor/controller.ts:3422-3826` installs many element/window listeners and two
   `ResizeObserver` instances without retaining teardown handles.
-- ES modules are cached, so importing `editor.js` after a remount will not
+- ES modules are cached, so importing `editor.ts` after a remount will not
   execute its initialization again.
 
 The current application mounts once, so this does not normally affect users.

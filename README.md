@@ -26,6 +26,11 @@ search). Automatic is the default. Tracking records a clickable confidence
 timeline and stops when the result becomes unreliable so the user can correct
 the box and continue. It also detects hard scene changes, stops on the first
 frame of the new scene, and preselects **New position** for the correction box.
+The crop-window planner follows the original `pyTracker` behavior: it applies a
+horizontal Gaussian filter to tracked positions, ignores small movements, and
+then interpolates between meaningful camera positions. Manual corrections and
+scene jumps remain exact, and the movement threshold scales slightly for very
+high-resolution sources.
 The first saved subject frame becomes the default cut start. Once a second frame
 is saved, the earliest and latest subject frames become the default cut range,
 even when the frames were selected out of chronological order.
@@ -94,6 +99,7 @@ npm run test
 npm run test:coverage
 npm run test:e2e
 npm run test:e2e:production
+npm run typecheck
 npm run build
 npm run check
 ```
@@ -106,26 +112,41 @@ restart, and output metadata. A separate smoke suite tests the production
 bundle, isolation headers, and local FFmpeg assets. GitHub Actions runs all of
 these checks for pushes and pull requests.
 
+Application modules, configuration, unit tests, and Playwright workflows are
+written in TypeScript. `npm run typecheck` validates production and
+configuration code; Vitest and Playwright compile and execute their TypeScript
+test suites.
+
 Critical pure logic lives in:
 
-- `src/video-utils.js` — time, size, crop, and keyframe calculations.
-- `src/ffmpeg-commands.js` — FFmpeg command construction.
-- `src/subject-selection.js` — normalized subject-box geometry.
-- `src/optical-flow-tracker.js` — point-flow tracking and automatic tracker selection.
-- `src/crop-trajectory.js` — crop positioning, interpolation, and scene jumps.
-- `src/webcodecs-editor.js` — native decoding, cropping, encoding, and muxing fallback.
+- `src/media/video-utils.ts` — time, size, crop, and keyframe calculations.
+- `src/processing/ffmpeg-commands.ts` — FFmpeg command construction.
+- `src/tracking/subject-selection.ts` — normalized subject-box geometry.
+- `src/tracking/optical-flow-tracker.ts` — point-flow tracking and automatic tracker selection.
+- `src/tracking/crop-trajectory.ts` — crop positioning, interpolation, and scene jumps.
+- `src/processing/webcodecs-editor.ts` — native decoding, cropping, encoding, and muxing fallback.
 
-The application shell is organized as follows:
+The `src` hierarchy is organized by responsibility:
 
-- `src/App.svelte` and `src/components/` define the page and editor stages.
-- `src/editor.js` coordinates browser media elements, editor state, and user
-  interactions after the Svelte application mounts.
-- `src/main.js` is the small Vite entry point that mounts Svelte.
+- `src/app/` contains the Vite entry point, application shell, and global CSS.
+- `src/components/` contains Svelte layout, dialog, and editor-panel markup.
+- `src/editor/` owns browser UI orchestration and editor-specific state.
+- `src/media/` contains reusable media metadata, scheduling, streaming, and
+  video helpers.
+- `src/tracking/` contains subject geometry, tracking, scene detection, and
+  crop trajectories.
+- `src/processing/` contains FFmpeg and WebCodecs conversion pipelines,
+  progress, and processing-step state.
+- `src/platform/` contains browser capability checks.
+
+Unit tests mirror these domains under `tests/editor/`, `tests/media/`,
+`tests/tracking/`, `tests/processing/`, and `tests/platform/`. Shared browser
+fixtures remain in `tests/fixtures/`, while full workflows live in `e2e/`.
 
 ## Requirements
 
 Use Node.js 24 (see `.nvmrc`; Node.js 22.12 or newer is supported).
 
-The FFmpeg runtime is served locally by the Vite plugin in `vite.config.js`.
+The FFmpeg runtime is served locally by the Vite plugin in `vite.config.ts`.
 The development and preview servers also include COOP and COEP headers so a
 multithreaded core can be introduced later without changing the hosting contract.
