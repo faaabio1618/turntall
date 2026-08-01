@@ -56,6 +56,8 @@ function assertCurrent(isCancelled) {
   }
 }
 
+const KEYFRAME_VERIFICATION_SAMPLE_COUNT = 4;
+
 export async function analyzeStreamingMedia(
   file,
   { isCancelled, onKeyframe } = {},
@@ -91,17 +93,41 @@ export async function analyzeStreamingMedia(
     assertCurrent(isCancelled);
 
     const sink = new EncodedPacketSink(videoTrack);
-    const keyframes = [];
+    const containerKeyframes = [];
     const options = { metadataOnly: true };
     let packet = await sink.getFirstKeyPacket(options);
     while (packet) {
       assertCurrent(isCancelled);
       if (Number.isFinite(packet.timestamp) && packet.timestamp >= 0) {
-        keyframes.push(packet.timestamp);
+        containerKeyframes.push(packet.timestamp);
         onKeyframe?.(packet.timestamp, duration);
       }
       packet = await sink.getNextKeyPacket(packet, options);
     }
+
+    let verifiedKeyframePrefixLength = 0;
+    for (const timestamp of containerKeyframes.slice(
+      0,
+      KEYFRAME_VERIFICATION_SAMPLE_COUNT,
+    )) {
+      assertCurrent(isCancelled);
+      const verifiedPacket = await sink.getPacket(timestamp, {
+        verifyKeyPackets: true,
+      });
+      if (verifiedPacket?.type !== "key") {
+        break;
+      }
+      verifiedKeyframePrefixLength += 1;
+    }
+    const keyframeIndexReliable =
+      verifiedKeyframePrefixLength ===
+      Math.min(
+        containerKeyframes.length,
+        KEYFRAME_VERIFICATION_SAMPLE_COUNT,
+      );
+    const keyframes = keyframeIndexReliable
+      ? containerKeyframes
+      : containerKeyframes.slice(0, verifiedKeyframePrefixLength);
 
     return {
       readable: Boolean(videoCodec),
@@ -113,6 +139,8 @@ export async function analyzeStreamingMedia(
       height,
       frameRate: stats.averagePacketRate,
       keyframes,
+      keyframeIndexReliable,
+      verifiedKeyframePrefixLength,
     };
   } finally {
     input.dispose();

@@ -11,6 +11,7 @@ import {
 } from "./crop-trajectory.js";
 import {
   decoderSupport,
+  ffmpegReencodeCommand,
   mediaCompatibilityWarning,
   parseDecoderList,
   parseMediaProbeLogs,
@@ -148,6 +149,7 @@ let suppressPreviewClick = false;
 let pendingSubjectSave;
 let isTrackingSubject = false;
 let stopTrackingRequested = false;
+let pendingFrameStepAfterTracking = 0;
 let trackingLastGoodTime;
 let trackingRequestedStopTime;
 let trackingLiveBox;
@@ -173,6 +175,7 @@ let activeProcessingStepId;
 let processingStepAction;
 let processingSegmentDuration;
 let lastProcessingPreviewUpdateAt = 0;
+let reencodeCopyStatusTimer;
 const subjectEditHistory = new SubjectEditHistory();
 
 const MAX_VISIBLE_KEYFRAME_MARKS = 240;
@@ -880,7 +883,7 @@ function renderSubjectBox() {
     subjectReferences.length === 0 && editingSubjectId === undefined;
   setLabeledControl(
     elements.confirmSubject,
-    startsTracking ? "Create vertical video" : "Save subject position",
+    startsTracking ? "Create vertical video" : "Save position",
     startsTracking ? "track" : "save",
   );
 
@@ -1643,6 +1646,7 @@ async function followSubjectForward() {
   suggestedSubjectJumpTime = undefined;
   isTrackingSubject = true;
   stopTrackingRequested = false;
+  pendingFrameStepAfterTracking = 0;
   trackingLiveBox = { ...anchor.box };
   previewControlsBeforeTracking = elements.preview.controls;
   previewMutedBeforeTracking = elements.preview.muted;
@@ -1848,6 +1852,19 @@ async function followSubjectForward() {
       );
     } else {
       setTrackingStatus("");
+    }
+
+    if (pendingFrameStepAfterTracking !== 0) {
+      const pendingFrameCount = pendingFrameStepAfterTracking;
+      pendingFrameStepAfterTracking = 0;
+      const pendingDirection = Math.sign(pendingFrameCount);
+      for (
+        let frame = 0;
+        frame < Math.abs(pendingFrameCount);
+        frame += 1
+      ) {
+        stepPreviewFrame(pendingDirection);
+      }
     }
   }
 }
@@ -2097,7 +2114,16 @@ function finishPreviewSubjectGesture(event) {
   previewSubjectGesture = undefined;
 }
 
-function preventPreviewClickDuringSubjectSelection(event) {
+function toggleSourcePreviewPlayback() {
+  pauseOutputPreview();
+  if (elements.preview.paused || elements.preview.ended) {
+    void elements.preview.play().catch(() => {});
+  } else {
+    elements.preview.pause();
+  }
+}
+
+function handlePreviewClick(event) {
   const previewRect = elements.preview.getBoundingClientRect();
   const controlGuard = elements.preview.controls
     ? Math.min(
@@ -2112,24 +2138,34 @@ function preventPreviewClickDuringSubjectSelection(event) {
     subjectReferences.length > 0 &&
     elements.preview.paused &&
     !clickedNativeControls;
+  const shouldBlockPlayback =
+    suppressPreviewClick ||
+    trackingRequiresCorrection ||
+    wouldStartSavedSubjectVideo;
 
-  if (
-    !suppressPreviewClick &&
-    !trackingRequiresCorrection &&
-    !wouldStartSavedSubjectVideo
-  ) {
+  if (clickedNativeControls && !shouldBlockPlayback) {
     return;
   }
 
   suppressPreviewClick = false;
   event.preventDefault();
   event.stopPropagation();
+
+  if (
+    !shouldBlockPlayback &&
+    !editorLocked() &&
+    browserPreviewReadable === true
+  ) {
+    toggleSourcePreviewPlayback();
+  }
 }
 
-function preventPlaybackDuringSubjectSelection() {
+function handlePreviewPlaybackStart() {
   if (isSelectingSubject || previewSubjectGesture?.started) {
     elements.preview.pause();
+    return;
   }
+  pauseOutputPreview();
 }
 
 function renderKeyframeMarks() {
@@ -2318,9 +2354,26 @@ function updateFrameStepControls() {
 }
 
 function stepPreviewFrame(direction) {
+  const frameDirection = Math.sign(direction);
+  if (frameDirection === 0) {
+    return;
+  }
+
+  if (isTrackingSubject) {
+    pendingFrameStepAfterTracking += frameDirection;
+    stopFollowingSubject();
+    return;
+  }
+
+  if (isSelectingSubject) {
+    // A subject box belongs to one exact source frame. Leave the unsaved edit
+    // before moving so the box cannot silently become attached to another one.
+    setSubjectSelectionMode(false);
+  }
+
   if (
-    editorLocked() ||
     browserPreviewReadable !== true ||
+    mediaInfo?.invalidSeekIndex ||
     !Number.isFinite(elements.preview.currentTime)
   ) {
     return;
@@ -2330,7 +2383,7 @@ function stepPreviewFrame(direction) {
   elements.preview.pause();
   const targetTime = frameStepTime(
     elements.preview.currentTime,
-    direction,
+    frameDirection,
     mediaInfo?.frameRate,
     duration,
   );
@@ -2361,22 +2414,36 @@ function handlePreviewKeyboardShortcut(event) {
       ),
     );
   if (isPlainSpace && !targetIsEditable && !event.defaultPrevented) {
-    event.preventDefault();
-    event.stopPropagation();
     const action = spaceShortcutAction({
       isTracking: isTrackingSubject,
       isSelecting: isSelectingSubject,
       canSaveSelection:
         !elements.subjectEditActions.hidden &&
         !elements.confirmSubject.disabled,
-      canFollow: !elements.followSubject.disabled,
+      canFollow:
+        !elements.subjectTrackingActions.hidden &&
+        !elements.followSubject.disabled,
     });
+    const previewHasFocus =
+      event.target === elements.preview ||
+      document.activeElement === elements.preview;
+    if (action === "none" && !previewHasFocus) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
     if (action === "stop-following") {
       stopFollowingSubject();
     } else if (action === "save-selection") {
       confirmSubjectSelection();
     } else if (action === "follow-forward") {
       void followSubjectForward();
+    } else if (
+      !editorLocked() &&
+      browserPreviewReadable === true
+    ) {
+      toggleSourcePreviewPlayback();
     }
     return;
   }
@@ -2398,6 +2465,18 @@ function handlePreviewKeyboardShortcut(event) {
     return;
   }
 
+  const isPlainFrameArrow =
+    !event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    (event.key === "ArrowLeft" || event.key === "ArrowRight");
+  if (isPlainFrameArrow) {
+    event.preventDefault();
+    event.stopPropagation();
+    stepPreviewFrame(event.key === "ArrowLeft" ? -1 : 1);
+    return;
+  }
+
   if (
     event.defaultPrevented ||
     event.altKey ||
@@ -2405,19 +2484,12 @@ function handlePreviewKeyboardShortcut(event) {
     event.metaKey ||
     (event.target instanceof Element &&
       event.target.closest(
-        "input, textarea, select, button, #tracking-confidence-canvas, [contenteditable]",
+        "input, textarea, select, #tracking-confidence-canvas, [contenteditable]",
       ))
   ) {
     return;
   }
 
-  if (event.key === "ArrowLeft") {
-    event.preventDefault();
-    stepPreviewFrame(-1);
-  } else if (event.key === "ArrowRight") {
-    event.preventDefault();
-    stepPreviewFrame(1);
-  }
 }
 
 function updateSelectionSummary() {
@@ -2446,8 +2518,15 @@ function setTime(kind, rawValue, seekPreview = false, snap = false) {
     snap && elements.snapKeyframes.checked && keyframes.length
       ? nearestKeyframe(clampedValue, duration, keyframes)
       : clampedValue;
-  elements[`${kind}Time`].value = value.toFixed(2);
-  elements[`${kind}Range`].value = String(value);
+  const roundedValue = Number(value.toFixed(2));
+  // Rounding a fractional media duration upward must not place the default
+  // end time beyond the source (for example, 3.008 becoming 3.01).
+  const displayedValue =
+    kind === "end" && roundedValue > duration
+      ? Math.floor(value * 100) / 100
+      : roundedValue;
+  elements[`${kind}Time`].value = displayedValue.toFixed(2);
+  elements[`${kind}Range`].value = String(displayedValue);
 
   if (seekPreview && browserPreviewReadable !== false) {
     elements.preview.currentTime = value;
@@ -2908,6 +2987,8 @@ function configureSelection() {
 function updateFormatSummary() {
   if (!mediaInfo) {
     elements.formatSummary.hidden = true;
+    elements.reencodeSuggestion.hidden = true;
+    elements.reencodeCopyStatus.textContent = "";
     return;
   }
 
@@ -2915,10 +2996,41 @@ function updateFormatSummary() {
     readable: mediaInfo.readable,
     canReencode: mediaInfo.canReencode,
     browserPreviewReadable,
+    invalidSeekIndex: mediaInfo.invalidSeekIndex,
   });
   elements.formatSummary.textContent = warning;
   elements.formatSummary.classList.toggle("warning", Boolean(warning));
   elements.formatSummary.hidden = !warning;
+  const suggestReencode = Boolean(
+    selectedFile &&
+      (mediaInfo.invalidSeekIndex ||
+        !mediaInfo.readable ||
+        !mediaInfo.canReencode),
+  );
+  elements.reencodeCommand.textContent = suggestReencode
+    ? ffmpegReencodeCommand(selectedFile.name)
+    : "";
+  elements.reencodeSuggestion.hidden = !suggestReencode;
+  elements.reencodeCopyStatus.textContent = "";
+}
+
+async function copyReencodeCommand() {
+  const command = elements.reencodeCommand.textContent.trim();
+  if (!command) {
+    return;
+  }
+
+  clearTimeout(reencodeCopyStatusTimer);
+  try {
+    await navigator.clipboard.writeText(command);
+    elements.reencodeCopyStatus.textContent = "Copied";
+  } catch {
+    elements.reencodeCopyStatus.textContent =
+      "Could not copy. Select the command manually.";
+  }
+  reencodeCopyStatusTimer = setTimeout(() => {
+    elements.reencodeCopyStatus.textContent = "";
+  }, 2000);
 }
 
 async function detectStreamingKeyframes(revision) {
@@ -2942,6 +3054,33 @@ async function detectStreamingKeyframes(revision) {
   });
 
   if (revision !== sourceRevision) {
+    return;
+  }
+
+  if (
+    analysis.keyframeIndexReliable === false &&
+    analysis.verifiedKeyframePrefixLength > 0 &&
+    analysis.containerNames.includes("mp4")
+  ) {
+    mediaInfo = {
+      ...analysis,
+      canReencode: false,
+      webCodecsEditing: false,
+      outputContainer: selectStreamCopyContainer(
+        analysis,
+        selectedFile.name,
+      ),
+      readable: true,
+      streamingInput: true,
+      invalidSeekIndex: true,
+    };
+    resetKeyframes();
+    elements.videoPanel.hidden = true;
+    elements.selectionPanel.hidden = true;
+    elements.outputOptionsPanel.hidden = true;
+    elements.outputPreviewPanel.hidden = true;
+    elements.resultPanel.hidden = true;
+    updateFormatSummary();
     return;
   }
 
@@ -3461,6 +3600,9 @@ elements.fileInput.addEventListener("change", () => {
   elements.fileDetails.textContent = `${file.name} · ${formatBytes(file.size)}`;
   elements.formatSummary.hidden = true;
   elements.formatSummary.classList.remove("warning");
+  elements.reencodeSuggestion.hidden = true;
+  elements.reencodeCommand.textContent = "";
+  elements.reencodeCopyStatus.textContent = "";
   setStatus("Preparing the video…", true, true);
   void detectKeyframes(sourceRevision);
 });
@@ -3479,6 +3621,16 @@ elements.preview.addEventListener("loadedmetadata", () => {
   duration = elements.preview.duration;
   sourceWidth = elements.preview.videoWidth;
   sourceHeight = elements.preview.videoHeight;
+  if (mediaInfo?.invalidSeekIndex) {
+    elements.videoPanel.hidden = true;
+    elements.frameStepControls.hidden = true;
+    elements.subjectPicker.hidden = true;
+    elements.selectionPanel.hidden = true;
+    elements.outputOptionsPanel.hidden = true;
+    elements.outputPreviewPanel.hidden = true;
+    finishVideoPreparation(sourceRevision);
+    return;
+  }
   if (!Number.isFinite(duration) || duration <= 0) {
     duration = 0;
     return;
@@ -3619,6 +3771,10 @@ elements.keepAudio.addEventListener("change", () => {
   updateSelectionSummary();
 });
 elements.videoSpeed.addEventListener("input", updateVideoSpeed);
+elements.copyReencodeCommand.addEventListener(
+  "click",
+  copyReencodeCommand,
+);
 elements.setStart.addEventListener("click", () =>
   setTime("start", elements.preview.currentTime, false, true),
 );
@@ -3725,12 +3881,12 @@ elements.preview.addEventListener(
 );
 elements.preview.addEventListener(
   "click",
-  preventPreviewClickDuringSubjectSelection,
+  handlePreviewClick,
   true,
 );
 elements.preview.addEventListener(
   "play",
-  preventPlaybackDuringSubjectSelection,
+  handlePreviewPlaybackStart,
 );
 window.addEventListener(
   "pointermove",
@@ -3805,8 +3961,6 @@ elements.cancelButton.addEventListener("click", () => {
     return;
   }
   resetFFmpegEngine();
-  setBusy(false);
-  setStatus("Cut cancelled.");
 });
 
 if (typeof ResizeObserver !== "undefined") {

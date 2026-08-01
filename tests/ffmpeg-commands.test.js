@@ -149,9 +149,25 @@ describe("FFmpeg cut commands", () => {
     expect(args[args.indexOf("-vf") + 1]).toBe(
       "setpts=(PTS-STARTPTS)/1.5",
     );
+    expect(args[args.indexOf("-t") + 1]).toBe("2.780");
     expect(args).toContain("-an");
     expect(args).not.toContain("-af");
     expect(args).toContain("libx264");
     expect(args).not.toContain("copy");
+  });
+
+  it("extends the output duration for slow-motion video", () => {
+    const args = createCutArgs({
+      ...baseCut,
+      vertical: true,
+      accurate: true,
+      playbackRate: 0.5,
+      keepAudio: false,
+    });
+
+    expect(args[args.indexOf("-t") + 1]).toBe("8.340");
+    expect(args[args.indexOf("-vf") + 1]).toContain(
+      "setpts=(PTS-STARTPTS)/0.5",
+    );
   });
 });

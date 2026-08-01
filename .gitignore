@@ -1,8 +1,12 @@
 node_modules/
 dist/
 coverage/
+playwright-report/
+playwright-report-production/
+test-results/
 *.log
 .idea/
 .codex/
 *.mp4
 *.webm
+!tests/fixtures/e2e-sample.webm

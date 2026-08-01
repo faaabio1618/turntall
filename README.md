@@ -83,17 +83,28 @@ automatically turns off and locks the **Fast cut** switch.
 
 ## Development
 
+Install Playwright's Chromium build once after installing the project:
+
+```sh
+npx playwright install chromium
+```
+
 ```sh
 npm run test
 npm run test:coverage
+npm run test:e2e
+npm run test:e2e:production
 npm run build
 npm run check
 ```
 
-The test suites cover timestamp and crop calculations, subject-selection
-geometry, keyframe normalization and snapping, FFmpeg command construction,
-container selection, and when user-facing compatibility warnings should appear.
-GitHub Actions runs the tests and production build for pushes and pull requests.
+The coverage gate includes every framework-independent media module, including
+streaming analysis and WebCodecs conversion, cleanup, audio, failure, and
+cancellation paths. Playwright uses a small committed video fixture to exercise
+tracking, stream-copy, speed-adjusted and vertical exports, cancellation and
+restart, and output metadata. A separate smoke suite tests the production
+bundle, isolation headers, and local FFmpeg assets. GitHub Actions runs all of
+these checks for pushes and pull requests.
 
 Critical pure logic lives in:
 

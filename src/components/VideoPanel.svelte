@@ -108,9 +108,9 @@
             class="subject-actions subject-tracking-actions"
             hidden
           >
-            <label class="tracking-speed-control">
+            <div class="tracking-speed-control">
               <span class="tracking-speed-label">
-                Speed
+                <label for="tracking-frame-skip">Speed</label>
                 <button
                   type="button"
                   class="tooltip-trigger"
@@ -127,7 +127,7 @@
                 <option value="4">4×</option>
                 <option value="6">6×</option>
               </select>
-            </label>
+            </div>
             <button
               id="follow-subject"
               type="button"
@@ -148,6 +148,20 @@
               disabled
             >
               Stop
+            </button>
+          </div>
+          <div
+            id="subject-edit-actions"
+            class="subject-actions subject-edit-actions"
+            hidden
+          >
+            <button
+              id="confirm-subject"
+              type="button"
+              aria-keyshortcuts="Space"
+              disabled
+            >
+              Create vertical video
             </button>
           </div>
           <div
@@ -195,20 +209,6 @@
               <span id="tracking-confidence-start">00:00.00</span>
               <span id="tracking-confidence-end">00:00.00</span>
             </div>
-          </div>
-          <div
-            id="subject-edit-actions"
-            class="subject-actions subject-edit-actions"
-            hidden
-          >
-            <button
-              id="confirm-subject"
-              type="button"
-              aria-keyshortcuts="Space"
-              disabled
-            >
-              Create vertical video
-            </button>
           </div>
           <label id="subject-jump-row" class="subject-jump-row" hidden>
             <input id="subject-jump" type="checkbox" />

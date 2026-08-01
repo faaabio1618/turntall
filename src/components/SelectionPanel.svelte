@@ -4,7 +4,7 @@
         <div class="time-row">
           <label for="start-time">Start (seconds)</label>
           <input id="start-time" type="number" min="0" step="0.01" value="0" />
-          <button id="set-start" type="button" class="secondary">Use playhead</button>
+          <button id="set-start" type="button" class="secondary">Use current</button>
         </div>
         <div class="range-wrap">
           <input
@@ -28,7 +28,7 @@
         <div class="time-row">
           <label for="end-time">End (seconds)</label>
           <input id="end-time" type="number" min="0" step="0.01" value="1" />
-          <button id="set-end" type="button" class="secondary">Use playhead</button>
+          <button id="set-end" type="button" class="secondary">Use current</button>
         </div>
         <div class="range-wrap">
           <input

@@ -1,6 +1,8 @@
 import {
   ArrowRight,
+  Copy,
   Download,
+  ExternalLink,
   Info,
   LoaderCircle,
   PawPrint,
@@ -20,7 +22,9 @@ const ICONS = {
   arrowRight: ArrowRight,
   brand: PawPrint,
   close: X,
+  copy: Copy,
   download: Download,
+  external: ExternalLink,
   info: Info,
   loading: LoaderCircle,
   pause: Pause,
@@ -75,6 +79,11 @@ export function collectUiElements(root = document) {
     fileInput: get("#file-input"),
     fileDetails: get("#file-details"),
     formatSummary: get("#format-summary"),
+    reencodeSuggestion: get("#reencode-suggestion"),
+    reencodeCommand: get("#reencode-command"),
+    copyReencodeCommand: get("#copy-reencode-command"),
+    reencodeCopyStatus: get("#reencode-copy-status"),
+    ffmpegDownloadLink: get("#ffmpeg-download-link"),
     videoPanel: get("#video-panel"),
     videoFps: get("#video-fps"),
     previewStage: get("#preview-stage"),
@@ -192,6 +201,8 @@ export function initializeUi(elements, browserNavigator = navigator) {
   setIconOnlyControl(elements.brandMark, "brand");
   setIconOnlyControl(elements.speedTooltip, "info");
   setIconOnlyControl(elements.cancelSubject, "close");
+  setIconOnlyControl(elements.copyReencodeCommand, "copy");
+  setLabeledControl(elements.ffmpegDownloadLink, "Get FFmpeg", "external");
   setIconOnlyControl(elements.clearSubject, "trash");
   setLabeledControl(elements.followSubject, "Track", "track");
   setLabeledControl(elements.stopFollowing, "Stop", "stop");

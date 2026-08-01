@@ -23,6 +23,18 @@ export function sourceExtension(filename) {
   return match ? match[1] : "";
 }
 
+export function ffmpegReencodeCommand(filename = "input.mp4") {
+  const sourceName = String(filename).trim() || "input.mp4";
+  const extensionIndex = sourceName.lastIndexOf(".");
+  const baseName =
+    extensionIndex > 0
+      ? sourceName.slice(0, extensionIndex)
+      : sourceName;
+  const outputName = `${baseName}-reencoded.mp4`;
+
+  return `ffmpeg -i "${sourceName}" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -force_key_frames "expr:gte(t,n_forced*2)" -c:a aac -b:a 192k -movflags +faststart "${outputName}"`;
+}
+
 export function parseDecoderList(logLines) {
   const decoders = new Set();
 
@@ -145,7 +157,11 @@ export function mediaCompatibilityWarning({
   readable,
   canReencode,
   browserPreviewReadable,
+  invalidSeekIndex = false,
 }) {
+  if (invalidSeekIndex) {
+    return "This video has invalid seek data, so browsers cannot move to the correct frame. Re-export or re-encode it, then load the new file.";
+  }
   if (!readable) {
     return "This video cannot be processed in your browser. Try another video or export it again from your video editor.";
   }

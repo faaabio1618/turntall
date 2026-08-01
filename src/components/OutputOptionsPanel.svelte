@@ -45,10 +45,6 @@
             step="0.25"
             value="1"
           />
-          <span class="output-speed-scale" aria-hidden="true">
-            <span>0.5×</span>
-            <span>3×</span>
-          </span>
         </label>
         <p id="crop-summary" class="summary muted" hidden></p>
       </section>

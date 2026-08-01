@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decoderSupport,
+  ffmpegReencodeCommand,
   mediaCompatibilityWarning,
   parseDecoderList,
   parseMediaProbeLogs,
@@ -8,6 +9,23 @@ import {
   selectStreamCopyContainer,
   sourceExtension,
 } from "../src/media-format.js";
+
+describe("FFmpeg recovery command", () => {
+  it("uses the selected filename and writes a separate MP4", () => {
+    expect(ffmpegReencodeCommand("my long clip.mov")).toBe(
+      'ffmpeg -i "my long clip.mov" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -force_key_frames "expr:gte(t,n_forced*2)" -c:a aac -b:a 192k -movflags +faststart "my long clip-reencoded.mp4"',
+    );
+  });
+
+  it("provides safe placeholder names when the filename is blank", () => {
+    expect(ffmpegReencodeCommand(" ")).toContain(
+      '-i "input.mp4"',
+    );
+    expect(ffmpegReencodeCommand("video")).toContain(
+      '"video-reencoded.mp4"',
+    );
+  });
+});
 
 describe("media probing", () => {
   const av1Mp4Logs = [
@@ -242,6 +260,19 @@ describe("user-facing compatibility warnings", () => {
       }),
     ).toBe(
       "This video cannot be processed in your browser. Try another video or export it again from your video editor.",
+    );
+  });
+
+  it("explains when the file's seek index is invalid", () => {
+    expect(
+      mediaCompatibilityWarning({
+        readable: true,
+        canReencode: true,
+        browserPreviewReadable: true,
+        invalidSeekIndex: true,
+      }),
+    ).toBe(
+      "This video has invalid seek data, so browsers cannot move to the correct frame. Re-export or re-encode it, then load the new file.",
     );
   });
 });

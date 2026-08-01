@@ -55,7 +55,7 @@ export function createCutArgs({
   const commonArgs = [
     ...inputArgs,
     "-t",
-    (end - start).toFixed(3),
+    ((end - start) / (speedChanged ? playbackRate : 1)).toFixed(3),
     "-map",
     "0:v:0",
     ...(keepAudio ? ["-map", "0:a?"] : ["-an"]),
