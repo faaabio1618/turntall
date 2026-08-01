@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Cut videos, create 9:16 vertical clips, and track moving subjects privately in your browser. GifTiger processes videos locally without uploading them."
+    />
+    <title>GifTiger · Local video editor</title>
+  </head>
+  <body>
+    <main>
+      <header class="brand-header">
+        <div class="brand-lockup">
+          <span id="brand-mark" class="brand-mark" aria-hidden="true"></span>
+          <span>
+            <small>Local video editor</small>
+            <h1>GifTiger</h1>
+          </span>
+        </div>
+        <ul class="intro" aria-label="What GifTiger does">
+          <li>Trim video clips</li>
+          <li>Create vertical videos</li>
+          <li>Keep moving subjects in frame</li>
+          <li>Without sharing the video</li>
+        </ul>
+      </header>
+
+      <aside id="mobile-warning" class="mobile-warning" role="alert" hidden>
+        GifTiger works best on desktop. Open this page on a computer to edit
+        videos.
+      </aside>
+
+      <section class="panel" aria-labelledby="source-heading">
+        <h2 id="source-heading">1. Choose a video</h2>
+        <label class="file-picker">
+          <span>Video file</span>
+          <input id="file-input" type="file" accept="video/*" />
+        </label>
+        <p id="file-details" class="muted">No video selected.</p>
+        <p id="format-summary" class="format-summary" hidden></p>
+      </section>
+
+      <section
+        id="video-panel"
+        class="panel"
+        aria-labelledby="video-heading"
+        hidden
+      >
+        <div class="panel-heading">
+          <h2 id="video-heading">2. Video</h2>
+          <span id="video-fps" class="video-fps" hidden></span>
+        </div>
+        <div id="preview-stage" class="video-stage" hidden>
+          <video
+            id="preview"
+            controls
+            preload="auto"
+            tabindex="0"
+            aria-keyshortcuts="Space ArrowLeft ArrowRight"
+          ></video>
+          <div
+            id="video-preparation-overlay"
+            class="video-preparation-overlay"
+            role="status"
+            aria-live="polite"
+            hidden
+          >
+            <div class="video-preparation-card">
+              <span class="loading-spinner" aria-hidden="true"></span>
+              <span>
+                <strong>Preparing video</strong>
+                <small id="video-preparation-message">
+                  Loading video details and keyframes…
+                </small>
+              </span>
+            </div>
+          </div>
+          <div
+            id="crop-preview"
+            class="crop-preview"
+            aria-hidden="true"
+            hidden
+          >
+            <span>Crop preview</span>
+          </div>
+          <output
+            id="preview-frame-indicator"
+            class="preview-frame-indicator"
+            aria-label="Current video frame"
+            hidden
+          ></output>
+          <div
+            id="subject-overlay"
+            class="subject-overlay"
+            aria-hidden="true"
+          >
+            <p id="subject-instruction" class="subject-instruction">
+              Drag around the subject
+            </p>
+            <div id="subject-surface" class="subject-surface">
+              <div
+                id="saved-subject-box"
+                class="saved-subject-box"
+                hidden
+              >
+                <span id="saved-subject-label" hidden></span>
+              </div>
+              <div id="tracking-box" class="tracking-box" hidden></div>
+              <div id="subject-box" class="subject-box" hidden>
+                <button
+                  id="cancel-subject"
+                  type="button"
+                  class="subject-box-close"
+                  aria-label="Cancel subject selection"
+                  title="Cancel subject selection"
+                >
+                </button>
+                <span
+                  class="subject-handle subject-handle-nw"
+                  data-handle="nw"
+                ></span>
+                <span
+                  class="subject-handle subject-handle-ne"
+                  data-handle="ne"
+                ></span>
+                <span
+                  class="subject-handle subject-handle-se"
+                  data-handle="se"
+                ></span>
+                <span
+                  class="subject-handle subject-handle-sw"
+                  data-handle="sw"
+                ></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          id="frame-step-controls"
+          class="frame-step-controls"
+          hidden
+        >
+          <small id="frame-step-help">
+            Arrow keys: one frame · Spacebar activates the orange button
+          </small>
+        </div>
+        <div id="subject-picker" class="subject-picker" hidden>
+          <div
+            id="subject-tracking-actions"
+            class="subject-actions subject-tracking-actions"
+            hidden
+          >
+            <label class="tracking-speed-control">
+              <span class="tracking-speed-label">
+                Speed
+                <span
+                  class="tooltip-trigger"
+                  tabindex="0"
+                  aria-label="1 times for fast-moving subjects. 6 times for mostly steady subjects."
+                  data-tooltip="1× for fast-moving subjects · 6× for mostly steady subjects"
+                ></span>
+              </span>
+              <select
+                id="tracking-frame-skip"
+                aria-label="Speed"
+              >
+                <option value="1">1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+                <option value="6">6×</option>
+              </select>
+            </label>
+            <button
+              id="follow-subject"
+              type="button"
+              aria-keyshortcuts="Space"
+              aria-label="Track subject (Spacebar)"
+              title="Keyboard shortcut: Spacebar"
+            >
+              Track
+            </button>
+            <button
+              id="stop-following"
+              type="button"
+              class="control-unavailable"
+              aria-keyshortcuts="Space"
+              aria-label="Stop here (Spacebar)"
+              title="Keyboard shortcut: Spacebar"
+              aria-hidden="true"
+              disabled
+            >
+              Stop
+            </button>
+          </div>
+          <div
+            id="tracking-status"
+            class="tracking-status"
+            role="status"
+            hidden
+          >
+            <span id="tracking-status-message"></span>
+            <span
+              id="tracking-status-shortcut"
+              class="tracking-status-shortcut"
+              hidden
+            ></span>
+          </div>
+          <div
+            id="tracking-confidence"
+            class="tracking-confidence"
+            hidden
+          >
+            <div class="tracking-confidence-heading">
+              <span>
+                <strong>Confidence</strong>
+              </span>
+            </div>
+            <div class="tracking-confidence-bar">
+              <canvas
+                id="tracking-confidence-canvas"
+                height="32"
+                tabindex="0"
+                role="slider"
+                aria-label="Tracking confidence timeline"
+                aria-valuemin="0"
+                aria-valuemax="0"
+                aria-valuenow="0"
+              ></canvas>
+              <span
+                id="tracking-confidence-playhead"
+                class="tracking-confidence-playhead"
+                aria-hidden="true"
+                hidden
+              ></span>
+            </div>
+            <div class="tracking-confidence-scale">
+              <span id="tracking-confidence-start">00:00.00</span>
+              <span id="tracking-confidence-end">00:00.00</span>
+            </div>
+          </div>
+          <div
+            id="subject-edit-actions"
+            class="subject-actions subject-edit-actions"
+            hidden
+          >
+            <button
+              id="confirm-subject"
+              type="button"
+              aria-keyshortcuts="Space"
+              disabled
+            >
+              Create vertical video
+            </button>
+          </div>
+          <label id="subject-jump-row" class="subject-jump-row" hidden>
+            <input id="subject-jump" type="checkbox" />
+            <span>
+              New position
+              <small>
+                Jump here instead of moving across the previous gap.
+              </small>
+            </span>
+          </label>
+          <div
+            id="subject-references"
+            class="subject-references"
+            aria-label="Selected subject frames"
+            hidden
+          >
+            <button
+              id="clear-subject"
+              type="button"
+              class="clear-subject-button"
+              aria-label="Clear all subject frames"
+              title="Clear all subject frames"
+              hidden
+            >
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="selection-panel" class="panel" aria-labelledby="selection-heading" hidden>
+        <h2 id="selection-heading">3. Choose the segment</h2>
+
+        <div class="time-row">
+          <label for="start-time">Start (seconds)</label>
+          <input id="start-time" type="number" min="0" step="0.01" value="0" />
+          <button id="set-start" type="button" class="secondary">Use playhead</button>
+        </div>
+        <div class="range-wrap">
+          <input
+            id="start-range"
+            class="range"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0"
+            aria-label="Start time"
+          />
+          <div
+            id="start-keyframes"
+            class="keyframe-track"
+            aria-hidden="true"
+            hidden
+          ></div>
+        </div>
+
+        <div class="time-row">
+          <label for="end-time">End (seconds)</label>
+          <input id="end-time" type="number" min="0" step="0.01" value="1" />
+          <button id="set-end" type="button" class="secondary">Use playhead</button>
+        </div>
+        <div class="range-wrap">
+          <input
+            id="end-range"
+            class="range"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value="1"
+            aria-label="End time"
+          />
+          <div
+            id="end-keyframes"
+            class="keyframe-track"
+            aria-hidden="true"
+            hidden
+          ></div>
+        </div>
+
+        <p id="selection-summary" class="summary"></p>
+        <p id="keyframe-summary" class="format-summary warning" hidden></p>
+
+        <!-- Fast cut is not currently shown; its existing logic remains active. -->
+        <label class="checkbox-row" hidden>
+          <input
+            id="snap-keyframes"
+            type="checkbox"
+            role="switch"
+            aria-describedby="cut-mode-help"
+            checked
+            disabled
+          />
+          <span>
+            Fast cut
+            <small id="cut-mode-help">
+              On: snaps to orange marks and avoids quality loss. Off: uses exact
+              timing and takes longer.
+            </small>
+          </span>
+        </label>
+      </section>
+
+      <section
+        id="output-options-panel"
+        class="panel"
+        aria-labelledby="output-options-heading"
+        hidden
+      >
+        <h2 id="output-options-heading">4. Output</h2>
+        <label class="checkbox-row">
+          <input
+            id="vertical-mode"
+            type="checkbox"
+            aria-describedby="vertical-help"
+          />
+          <span>
+            9:16 vertical video
+            <small id="vertical-help">
+              Keeps the center of the frame.
+            </small>
+          </span>
+        </label>
+        <label class="checkbox-row">
+          <input
+            id="keep-audio"
+            type="checkbox"
+            aria-describedby="audio-help"
+            checked
+          />
+          <span>
+            Keep audio
+            <small id="audio-help">
+              Turn this off to create a silent video.
+            </small>
+          </span>
+        </label>
+        <label class="output-speed-control" for="video-speed">
+          <span class="output-speed-heading">
+            <span>Video speed</span>
+            <output id="video-speed-value" for="video-speed">1×</output>
+          </span>
+          <input
+            id="video-speed"
+            type="range"
+            min="0.5"
+            max="3"
+            step="0.25"
+            value="1"
+          />
+          <span class="output-speed-scale" aria-hidden="true">
+            <span>0.5×</span>
+            <span>3×</span>
+          </span>
+        </label>
+        <p id="crop-summary" class="summary muted" hidden></p>
+      </section>
+
+      <section
+        id="output-preview-panel"
+        class="panel"
+        aria-labelledby="output-preview-heading"
+        hidden
+      >
+        <h2 id="output-preview-heading">5. Preview</h2>
+        <p class="muted">
+          Check the selected segment and framing before creating the file.
+        </p>
+        <div class="output-preview-stage">
+          <video
+            id="output-preview-media"
+            class="output-preview-media"
+            preload="auto"
+            playsinline
+          ></video>
+          <canvas
+            id="output-preview-canvas"
+            aria-label="Video output preview"
+            hidden
+          ></canvas>
+          <output
+            id="output-preview-frame-indicator"
+            class="output-preview-frame-indicator"
+            aria-label="Current output preview frame"
+            hidden
+          ></output>
+        </div>
+        <div class="output-preview-controls">
+          <button
+            id="output-preview-toggle"
+            type="button"
+            class="secondary"
+          >
+            Play preview
+          </button>
+          <input
+            id="output-preview-seek"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value="0"
+            aria-label="Preview position"
+          />
+          <output id="output-preview-time">00:00.00 / 00:00.00</output>
+        </div>
+        <p id="output-preview-note" class="muted output-preview-note">
+          This preview uses the original video and does not create a file.
+        </p>
+        <button id="cut-button" type="button">Cut video</button>
+        <button id="cancel-button" type="button" class="secondary" hidden>Cancel</button>
+      </section>
+
+      <section id="result-panel" class="panel" aria-live="polite" hidden>
+        <h2>6. Result</h2>
+        <p id="status">Ready.</p>
+        <ol
+          id="processing-steps"
+          class="processing-steps"
+          aria-label="Video creation steps"
+          hidden
+        >
+          <li id="processing-step-prepare" class="processing-step">
+            <span class="processing-step-marker" aria-hidden="true">1</span>
+            <span class="processing-step-copy">
+              <strong>Load the source video</strong>
+              <span id="processing-step-prepare-detail">Waiting</span>
+            </span>
+          </li>
+          <li id="processing-step-process" class="processing-step">
+            <span class="processing-step-marker" aria-hidden="true">2</span>
+            <span class="processing-step-copy">
+              <strong id="processing-step-process-label">
+                Cut the selected clip
+              </strong>
+              <span id="processing-step-process-detail">Waiting</span>
+            </span>
+          </li>
+          <li id="processing-step-finalize" class="processing-step">
+            <span class="processing-step-marker" aria-hidden="true">3</span>
+            <span class="processing-step-copy">
+              <strong>Finish the video and prepare the download</strong>
+              <span id="processing-step-finalize-detail">Waiting</span>
+            </span>
+          </li>
+        </ol>
+        <progress
+          id="progress"
+          value="0"
+          max="1"
+          aria-label="Current step progress"
+          hidden
+        ></progress>
+        <p id="time-estimate" class="time-estimate muted" hidden>
+          Estimating time remaining…
+        </p>
+        <div id="download-controls" class="download-controls" hidden>
+          <label for="output-filename">
+            <span>File name</span>
+            <input
+              id="output-filename"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+          <a id="download-link" class="button-link" hidden>Download</a>
+        </div>
+      </section>
+    </main>
+
+    <section class="seo-section" aria-labelledby="seo-heading">
+      <p class="seo-eyebrow">Private, local video editing</p>
+      <h2 id="seo-heading">Cut and reframe videos in your browser</h2>
+      <div class="seo-copy">
+        <p>
+          GifTiger is a browser-based video cutter that processes your files
+          locally on your device. Trim a video and download the result without
+          uploading or sharing the original file.
+        </p>
+        <p>
+          Create 9:16 vertical videos from horizontal footage, select the
+          subject you want to keep in frame, and track its movement through the
+          clip. Manual subject positions make it easy to correct tracking or
+          handle scene changes.
+        </p>
+        <p>
+          Choose precise start and end times, keep or remove audio, adjust video
+          speed, preview the crop, and export a social-media-ready vertical
+          video—all inside Google Chrome.
+        </p>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <span>GifTiger</span>
+      <a href="mailto:info@giftiger.app">info@giftiger.app</a>
+    </footer>
+
+    <dialog
+      id="browser-gate"
+      class="browser-gate"
+      aria-labelledby="browser-gate-title"
+      aria-describedby="browser-gate-copy"
+    >
+      <div class="confirmation-dialog">
+        <p class="browser-gate-label">Browser not supported</p>
+        <h2 id="browser-gate-title">Open this page in Google Chrome</h2>
+        <p id="browser-gate-copy">
+          This video editor requires Google Chrome. To start using it, copy
+          this page's address and open it in Chrome.
+        </p>
+        <div class="confirmation-dialog-actions">
+          <a
+            class="button-link"
+            href="https://www.google.com/chrome/"
+            rel="noreferrer"
+          >
+            Get Google Chrome
+          </a>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog
+      id="clear-subject-dialog"
+      aria-labelledby="clear-subject-dialog-title"
+    >
+      <form method="dialog" class="confirmation-dialog">
+        <h2 id="clear-subject-dialog-title">Clear all subject boxes?</h2>
+        <p>
+          This removes every selected and automatically tracked subject box.
+        </p>
+        <div class="confirmation-dialog-actions">
+          <button value="cancel" type="submit" class="secondary">
+            Cancel
+          </button>
+          <button value="clear" type="submit" class="danger">
+            Clear all
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="later-subject-dialog"
+      aria-labelledby="later-subject-dialog-title"
+    >
+      <form method="dialog" class="confirmation-dialog">
+        <h2 id="later-subject-dialog-title">Delete later subject boxes?</h2>
+        <p id="later-subject-dialog-copy">
+          Changing this frame may make the later subject positions inaccurate.
+        </p>
+        <div class="confirmation-dialog-actions">
+          <button value="keep" type="submit" class="secondary">
+            Keep later boxes
+          </button>
+          <button value="delete" type="submit" class="danger">
+            Delete later boxes
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="restart-tracking-dialog"
+      aria-labelledby="restart-tracking-dialog-title"
+    >
+      <form method="dialog" class="confirmation-dialog">
+        <h2 id="restart-tracking-dialog-title">
+          Redraw the subject to fix the tracking?
+        </h2>
+        <p>You moved behind the latest tracked frame.</p>
+        <div class="confirmation-dialog-actions">
+          <button value="continue" type="submit" class="secondary">
+            No
+          </button>
+          <button value="redraw" type="submit">Yes</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
