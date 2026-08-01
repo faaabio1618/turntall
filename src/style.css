@@ -741,8 +741,21 @@ video {
 .tooltip-trigger {
   position: relative;
   display: inline-flex;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
   color: #4b5563;
+  background: transparent;
+  box-shadow: none;
   cursor: help;
+}
+
+.tooltip-trigger:hover,
+.tooltip-trigger:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
 }
 
 .tooltip-trigger::after {

@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { svelte } from "@sveltejs/vite-plugin-svelte";
 import {
   copyFileSync,
   createReadStream,
@@ -56,7 +57,7 @@ function ffmpegCoreAssetsPlugin() {
 }
 
 export default defineConfig({
-  plugins: [ffmpegCoreAssetsPlugin()],
+  plugins: [svelte(), ffmpegCoreAssetsPlugin()],
   server: {
     headers: {
       "Cross-Origin-Embedder-Policy": "require-corp",

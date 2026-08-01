@@ -1,6 +1,6 @@
 # Giftiger
 
-A local-first browser video editor powered by FFmpeg WebAssembly and native
+A local-first Svelte 5 video editor powered by FFmpeg WebAssembly and native
 WebCodecs. Video data is processed on the user's device and is never uploaded.
 
 ## Run it
@@ -103,7 +103,13 @@ Critical pure logic lives in:
 - `src/optical-flow-tracker.js` — point-flow tracking and automatic tracker selection.
 - `src/crop-trajectory.js` — crop positioning, interpolation, and scene jumps.
 - `src/webcodecs-editor.js` — native decoding, cropping, encoding, and muxing fallback.
-- `src/main.js` — browser state, FFmpeg lifecycle, and UI orchestration.
+
+The application shell is organized as follows:
+
+- `src/App.svelte` and `src/components/` define the page and editor stages.
+- `src/editor.js` coordinates browser media elements, editor state, and user
+  interactions after the Svelte application mounts.
+- `src/main.js` is the small Vite entry point that mounts Svelte.
 
 ## Requirements
 

@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "check": "vitest run && vite build"
+    "check:svelte": "svelte-check",
+    "check": "vitest run && svelte-check && vite build"
   },
   "private": true,
   "engines": {
@@ -24,7 +25,10 @@
     "mediabunny": "1.44.2"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@vitest/coverage-v8": "^4.1.10",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.4",
     "vite": "8.1.5",
     "vitest": "^4.1.10"
   }
