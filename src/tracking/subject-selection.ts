@@ -196,6 +196,36 @@ export function subjectReferencesAfter(
   );
 }
 
+export function subjectReferencesNeedingDecision(
+  references,
+  time,
+  excludedId,
+  frameRate,
+) {
+  const laterReferences = subjectReferencesAfter(
+    references,
+    time,
+    excludedId,
+  );
+  const finalReference = (references ?? [])
+    .filter((reference) => Number.isFinite(reference.time))
+    .sort((left, right) => left.time - right.time)
+    .at(-1);
+  const frameDuration =
+    Number.isFinite(frameRate) && frameRate > 0
+      ? 1 / frameRate
+      : 1 / 30;
+
+  return laterReferences.filter(
+    (reference) =>
+      !(
+        reference.id === finalReference?.id &&
+        reference.automatic === true &&
+        reference.time - time <= frameDuration * 1.1
+      ),
+  );
+}
+
 export function subjectReferenceAtTime(
   references,
   time,
@@ -215,7 +245,7 @@ export function subjectReferenceAtTime(
   const isTerminalTrackedFrame =
     lastReference?.automatic === true &&
     Number.isFinite(duration) &&
-    lastReference.time >= duration - 0.005 &&
+    Math.abs(duration - lastReference.time) <= frameDuration * 1.1 &&
     time < lastReference.time &&
     lastReference.time - time <= frameDuration * 1.1;
 

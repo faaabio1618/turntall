@@ -49,7 +49,7 @@ import {
   replaceSubjectReference,
   subjectBoxAtTime,
   subjectReferenceAtTime,
-  subjectReferencesAfter,
+  subjectReferencesNeedingDecision,
   subjectTimeBounds,
   trackingRestartRequiresDecision,
 } from "../tracking/subject-selection.ts";
@@ -1461,10 +1461,11 @@ function confirmSubjectSelection() {
       elements.subjectJump.checked,
     automatic: false,
   };
-  const laterReferences = subjectReferencesAfter(
+  const laterReferences = subjectReferencesNeedingDecision(
     subjectReferences,
     subjectSelectionTime,
     referenceId,
+    mediaInfo?.frameRate,
   );
 
   if (laterReferences.length > 0) {

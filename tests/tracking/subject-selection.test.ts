@@ -12,6 +12,7 @@ import {
   subjectBoxAtTime,
   subjectReferenceAtTime,
   subjectReferencesAfter,
+  subjectReferencesNeedingDecision,
   subjectTimeBounds,
   trackingRestartRequiresDecision,
 } from "../../src/tracking/subject-selection.ts";
@@ -170,7 +171,7 @@ describe("matching the selected subject frame", () => {
           terminalReference,
         ],
         2.9667,
-        { duration: 3, frameRate: 30 },
+        { duration: 3.008, frameRate: 30 },
       ),
     ).toBe(terminalReference);
   });
@@ -182,6 +183,32 @@ describe("matching the selected subject frame", () => {
         frameRate: 30,
       }),
     ).toBeUndefined();
+  });
+
+  it("does not call the terminal automatic marker a later box", () => {
+    expect(
+      subjectReferencesNeedingDecision(
+        [
+          { id: 1, time: 0, automatic: false },
+          { id: 2, time: 2.9667, automatic: true },
+          terminalReference,
+        ],
+        2.9667,
+        2,
+        30,
+      ),
+    ).toEqual([]);
+  });
+
+  it("keeps a genuinely later terminal marker in the decision", () => {
+    expect(
+      subjectReferencesNeedingDecision(
+        [{ id: 1, time: 2.9 }, terminalReference],
+        2.9,
+        1,
+        30,
+      ),
+    ).toEqual([terminalReference]);
   });
 });
 
