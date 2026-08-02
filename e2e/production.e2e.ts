@@ -26,7 +26,7 @@ test("serves the production editor and local FFmpeg assets", async ({
 
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "GifTiger", level: 1 }),
+    page.getByRole("heading", { name: "turntall.com", level: 1 }),
   ).toBeVisible();
   await expect(page.locator("#browser-gate")).not.toBeVisible();
   await expect.poll(() => page.evaluate(() => crossOriginIsolated)).toBe(true);

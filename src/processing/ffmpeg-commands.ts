@@ -49,8 +49,11 @@ export function createCutArgs({
 }) {
   const speedChanged = Math.abs(playbackRate - 1) > 0.000001;
   const needsDecoding = vertical || accurate || speedChanged;
-  const inputArgs = needsDecoding
-    ? ["-threads", "1", "-i", inputName, "-ss", start.toFixed(3)]
+  const transformsVideo = vertical || speedChanged;
+  const inputArgs = transformsVideo
+    ? ["-threads", "1", "-ss", start.toFixed(3), "-i", inputName]
+    : needsDecoding
+      ? ["-threads", "1", "-i", inputName, "-ss", start.toFixed(3)]
     : ["-ss", start.toFixed(3), "-i", inputName];
   const commonArgs = [
     ...inputArgs,
@@ -68,15 +71,20 @@ export function createCutArgs({
   if (vertical) {
     videoFilters.push(
       cropTrajectory
-        ? `setpts=PTS-STARTPTS,${createFFmpegCropFilter(
+        ? createFFmpegCropFilter(
             cropSize,
             cropTrajectory,
-          )}`
+          )
         : `crop=${cropSize.width}:${cropSize.height}:(iw-${cropSize.width})/2:(ih-${cropSize.height})/2`,
     );
   }
   if (speedChanged) {
     videoFilters.push(`setpts=(PTS-STARTPTS)/${playbackRate}`);
+  } else if (vertical) {
+    // Evaluate moving-crop decisions on the seek-relative input timestamps,
+    // then normalize the completed video. Resetting PTS before crop evaluation
+    // can leave the old crop on the first frame of a new-position jump.
+    videoFilters.push("setpts=PTS-STARTPTS");
   }
 
   const encodingArgs = vertical

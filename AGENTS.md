@@ -1,11 +1,11 @@
-# GifTiger agent guide
+# turntall.com agent guide
 
 This file describes the repository for coding agents. It applies to the entire
 project unless a more specific `AGENTS.md` is added in a subdirectory.
 
 ## Project overview
 
-GifTiger is a local-first browser video editor. A user can:
+turntall.com is a local-first browser video editor. A user can:
 
 - load a video without uploading or sharing it;
 - choose exact start and end times;
@@ -183,6 +183,10 @@ Preserve these unless the user explicitly asks for different behavior:
   briefly animates that choice.
 - Saving a new position must preserve both the box and the correct source frame
   used by the preview.
+- Manual subject positions use Chrome's presented-frame `mediaTime`, not only
+  the requested media playhead time. A `New position` must switch both the box
+  and crop on that exact frame. FFmpeg must evaluate the crop before resetting
+  presentation timestamps.
 - The 9:16 option becomes required and cannot be deselected while subject
   references exist.
 - Clearing all subject positions requires confirmation. Cancelling the dialog
@@ -216,12 +220,12 @@ Preserve these unless the user explicitly asks for different behavior:
 
 ### Design and content
 
-- The product name is `GifTiger`.
+- The product name is `turntall.com`.
 - Orange is the primary color; avoid reintroducing blue as the main action
   color.
 - Prefer concise labels and Lucide icons over verbose UI copy.
 - Preserve the mobile warning, SEO section, privacy language, and
-  `mailto:info@giftiger.app` footer link.
+  `mailto:info@turntall.com` footer link.
 - The page should fill the viewport without an unnecessary white outer card.
 
 ## Testing expectations

@@ -1,4 +1,4 @@
-# Giftiger
+# turntall.com
 
 A local-first Svelte 5 video editor powered by FFmpeg WebAssembly and native
 WebCodecs. Video data is processed on the user's device and is never uploaded.
@@ -150,3 +150,10 @@ Use Node.js 24 (see `.nvmrc`; Node.js 22.12 or newer is supported).
 The FFmpeg runtime is served locally by the Vite plugin in `vite.config.ts`.
 The development and preview servers also include COOP and COEP headers so a
 multithreaded core can be introduced later without changing the hosting contract.
+
+## Production deployment
+
+Production is built by GitHub Actions and deployed to a private Amazon S3
+bucket behind CloudFront. AWS access uses GitHub OIDC, so no permanent AWS
+access keys are stored in GitHub. The infrastructure and setup instructions are
+in [`terraform/`](terraform/README.md).

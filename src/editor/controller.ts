@@ -81,6 +81,7 @@ import {
   formatTime,
   nearestKeyframe,
   parseFramecrcKeyframes,
+  presentedFrameTime,
   sameDisplayedTime,
   spaceShortcutAction,
   suggestedTrackingFrameSkip,
@@ -161,12 +162,14 @@ let suggestedSubjectJumpTime;
 let trackingCanvas;
 let previewControlsBeforeTracking = true;
 let previewMutedBeforeTracking = false;
+let previewPresentedTime;
 let outputPreviewReady = false;
 let outputPreviewFinished = false;
 let outputPreviewStarting = false;
 let outputPreviewPendingSeek;
 let outputPreviewDraggingPointer;
 let outputPreviewFramePresented = false;
+let outputPreviewPresentedTime;
 let processingEstimateStartedAt;
 let processingTimeEstimator;
 let processingEstimateTimer;
@@ -210,6 +213,22 @@ function selection() {
 
 function selectedVideoSpeed() {
   return clamp(Number(elements.videoSpeed.value), 0.5, 3);
+}
+
+function sourcePreviewTime() {
+  return presentedFrameTime(
+    elements.preview.currentTime,
+    previewPresentedTime,
+    mediaInfo?.frameRate,
+  );
+}
+
+function outputPreviewSourceTime() {
+  return presentedFrameTime(
+    elements.outputPreviewMedia.currentTime,
+    outputPreviewPresentedTime,
+    mediaInfo?.frameRate,
+  );
 }
 
 function updateVideoSpeed() {
@@ -276,8 +295,8 @@ function subjectEditState() {
     nextSubjectId,
     start,
     end,
-    previewTime: Number.isFinite(elements.preview.currentTime)
-      ? elements.preview.currentTime
+    previewTime: Number.isFinite(sourcePreviewTime())
+      ? sourcePreviewTime()
       : start,
   };
 }
@@ -380,7 +399,7 @@ function updateSubjectSurfaceRect() {
   renderSavedSubjectBox();
 }
 
-function previewFrameNumber(time = elements.preview.currentTime) {
+function previewFrameNumber(time = sourcePreviewTime()) {
   const frameRate = mediaInfo?.frameRate;
   if (!Number.isFinite(time) || !Number.isFinite(frameRate) || frameRate <= 0) {
     return undefined;
@@ -400,7 +419,7 @@ function renderPreviewFrameIndicator() {
 
 function renderOutputPreviewFrameIndicator() {
   const frame = previewFrameNumber(
-    elements.outputPreviewMedia.currentTime,
+    outputPreviewSourceTime(),
   );
   elements.outputPreviewFrameIndicator.hidden =
     frame === undefined || elements.outputPreviewCanvas.hidden;
@@ -424,6 +443,8 @@ function renderCropPreview() {
     return;
   }
 
+  const previewTime = sourcePreviewTime();
+
   const stageRect = elements.previewStage.getBoundingClientRect();
   const previewRect = elements.preview.getBoundingClientRect();
   const contentRect = containedMediaRect(
@@ -438,7 +459,7 @@ function renderCropPreview() {
         ...subjectReferences,
         {
           id: "tracking-live",
-          time: elements.preview.currentTime,
+          time: previewTime,
           box: trackingLiveBox,
           jump: false,
           automatic: true,
@@ -454,7 +475,7 @@ function renderCropPreview() {
   });
   const crop = cropRectangleAtTime(
     trajectory,
-    elements.preview.currentTime,
+    previewTime,
     cropSize,
   );
 
@@ -482,18 +503,21 @@ function stopCropPreviewAnimation() {
   cropPreviewFrames.cancel();
 }
 
-function scheduleCropPreviewFrame() {
+function scheduleCropPreviewFrame(force = false) {
   if (
     cropPreviewFrames.pending ||
-    elements.preview.paused ||
     elements.preview.ended ||
-    subjectReferences.length === 0
+    (!force && elements.preview.paused)
   ) {
     return;
   }
 
-  const renderNextFrame = () => {
+  const renderNextFrame = (_now, metadata) => {
+    previewPresentedTime = Number.isFinite(metadata?.mediaTime)
+      ? metadata.mediaTime
+      : elements.preview.currentTime;
     renderCropPreview();
+    renderSavedSubjectBox();
     renderPreviewFrameIndicator();
     scheduleCropPreviewFrame();
   };
@@ -517,7 +541,10 @@ function scheduleOutputPreviewStillFrame() {
     return;
   }
 
-  const drawPresentedFrame = () => {
+  const drawPresentedFrame = (_now, metadata) => {
+    outputPreviewPresentedTime = Number.isFinite(metadata?.mediaTime)
+      ? metadata.mediaTime
+      : elements.outputPreviewMedia.currentTime;
     outputPreviewFramePresented = true;
     drawOutputPreviewFrame();
   };
@@ -527,6 +554,7 @@ function scheduleOutputPreviewStillFrame() {
 function setOutputPreviewMediaTime(time) {
   stopOutputPreviewStillFrame();
   outputPreviewFramePresented = false;
+  outputPreviewPresentedTime = undefined;
   elements.outputPreviewMedia.currentTime = time;
   scheduleOutputPreviewStillFrame();
 }
@@ -608,7 +636,7 @@ function drawOutputPreviewFrame() {
     references: subjectReferences,
     start,
     end,
-    currentTime: elements.outputPreviewMedia.currentTime,
+    currentTime: outputPreviewSourceTime(),
     sourceWidth,
     sourceHeight,
   });
@@ -669,7 +697,10 @@ function scheduleOutputPreviewFrame() {
     return;
   }
 
-  const renderNextFrame = () => {
+  const renderNextFrame = (_now, metadata) => {
+    outputPreviewPresentedTime = Number.isFinite(metadata?.mediaTime)
+      ? metadata.mediaTime
+      : elements.outputPreviewMedia.currentTime;
     outputPreviewFramePresented = true;
     const { end } = selection();
     if (elements.outputPreviewMedia.currentTime >= end - 0.005) {
@@ -815,6 +846,7 @@ function resetOutputPreviewMedia() {
   outputPreviewStarting = false;
   outputPreviewPendingSeek = undefined;
   outputPreviewFramePresented = false;
+  outputPreviewPresentedTime = undefined;
   stopOutputPreviewStillFrame();
   elements.outputPreviewPanel.hidden = true;
   elements.outputPreviewMedia.removeAttribute("src");
@@ -913,7 +945,7 @@ function renderSavedSubjectBox() {
   const box = visible
     ? subjectBoxAtTime(
         subjectReferences,
-        elements.preview.currentTime,
+        sourcePreviewTime(),
       )
     : undefined;
   elements.savedSubjectBox.hidden = !box;
@@ -1264,8 +1296,9 @@ function beginSubjectSelection(
   elements.preview.pause();
   previewControlsBeforeSubject = elements.preview.controls;
   elements.preview.controls = false;
-  const currentTime = Number.isFinite(elements.preview.currentTime)
-    ? elements.preview.currentTime
+  const presentedTime = sourcePreviewTime();
+  const currentTime = Number.isFinite(presentedTime)
+    ? presentedTime
     : 0;
   const requestedReference = forceNew
     ? undefined
@@ -1308,7 +1341,7 @@ function beginSubjectSelection(
 
   if (
     reference &&
-    !sameDisplayedTime(elements.preview.currentTime, reference.time)
+    !sameDisplayedTime(sourcePreviewTime(), reference.time)
   ) {
     elements.preview.currentTime = reference.time;
   }
@@ -1372,7 +1405,7 @@ function saveSubjectReference(
   if (isNewReference || deleteFollowing) {
     applySubjectTimeBounds();
   }
-  updateSubjectSummary(elements.preview.currentTime);
+  updateSubjectSummary(sourcePreviewTime());
 
   setTrackingStatus("");
 }
@@ -1621,7 +1654,7 @@ async function followSubjectForward() {
   if (
     trackingRestartRequiresDecision(
       subjectReferences,
-      elements.preview.currentTime,
+      sourcePreviewTime(),
     )
   ) {
     const decision = await requestTrackingRestartDecision();
@@ -2587,6 +2620,7 @@ function resetFFmpegEngine() {
 
 function releaseLoadedVideo() {
   stopCropPreviewAnimation();
+  previewPresentedTime = undefined;
   elements.preview.pause();
   elements.preview.removeAttribute("src");
   elements.preview.load();
@@ -3627,6 +3661,8 @@ elements.fileInput.addEventListener("change", () => {
 });
 
 elements.preview.addEventListener("loadeddata", () => {
+  previewPresentedTime = undefined;
+  scheduleCropPreviewFrame(true);
   if (elements.preview.currentTime <= 0 && elements.preview.duration > 0) {
     elements.preview.currentTime = Math.min(
       0.001,
@@ -3690,6 +3726,10 @@ elements.preview.addEventListener("timeupdate", () => {
   renderPreviewFrameIndicator();
   renderTrackingConfidencePlayhead();
 });
+elements.preview.addEventListener("seeking", () => {
+  previewPresentedTime = undefined;
+  scheduleCropPreviewFrame(true);
+});
 elements.preview.addEventListener("play", () => {
   pauseOutputPreview();
   scheduleCropPreviewFrame();
@@ -3702,6 +3742,7 @@ elements.preview.addEventListener("pause", () => {
   renderTrackingConfidencePlayhead();
 });
 elements.preview.addEventListener("seeked", () => {
+  scheduleCropPreviewFrame(true);
   renderSavedSubjectBox();
   renderPreviewFrameIndicator();
   renderTrackingConfidencePlayhead();
@@ -3709,8 +3750,8 @@ elements.preview.addEventListener("seeked", () => {
 elements.preview.addEventListener("ended", stopCropPreviewAnimation);
 elements.outputPreviewMedia.addEventListener("loadeddata", () => {
   outputPreviewReady = true;
-  // loadeddata guarantees that the initial frame can be drawn immediately.
-  outputPreviewFramePresented = true;
+  outputPreviewFramePresented = false;
+  outputPreviewPresentedTime = undefined;
   elements.outputPreviewNote.textContent = PREVIEW_NOTE_WITH_AUDIO;
   if (
     elements.outputPreviewMedia.currentTime <= 0 &&
@@ -3721,17 +3762,13 @@ elements.outputPreviewMedia.addEventListener("loadeddata", () => {
     );
     return;
   }
-  refreshOutputPreview();
+  scheduleOutputPreviewStillFrame();
 });
 elements.outputPreviewMedia.addEventListener("seeked", () => {
   outputPreviewPendingSeek = undefined;
-  stopOutputPreviewStillFrame();
-  if (elements.outputPreviewMedia.readyState >= 2) {
-    outputPreviewFramePresented = true;
-    drawOutputPreviewFrame();
-  } else {
-    scheduleOutputPreviewStillFrame();
-  }
+  outputPreviewFramePresented = false;
+  outputPreviewPresentedTime = undefined;
+  scheduleOutputPreviewStillFrame();
 });
 elements.outputPreviewMedia.addEventListener("timeupdate", () => {
   const { end } = selection();

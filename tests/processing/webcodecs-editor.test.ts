@@ -480,7 +480,7 @@ describe("WebCodecs cutting", () => {
 
     expect(result.data).toBe(outputFile);
     expect(directory.getFileHandle).toHaveBeenCalledWith(
-      "giftiger-output-test-id.mp4",
+      "turntall-output-test-id.mp4",
       { create: true },
     );
     expect(media.streamTargets[0].options).toEqual({
@@ -489,7 +489,7 @@ describe("WebCodecs cutting", () => {
     });
     await result.cleanup();
     expect(directory.removeEntry).toHaveBeenCalledWith(
-      "giftiger-output-test-id.mp4",
+      "turntall-output-test-id.mp4",
     );
   });
 

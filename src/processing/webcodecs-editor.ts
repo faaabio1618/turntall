@@ -199,7 +199,7 @@ async function createOutputTarget(diskBacked) {
 
   const directory = await navigator.storage.getDirectory();
   const suffix = globalThis.crypto?.randomUUID?.() ?? Date.now();
-  const filename = `giftiger-output-${suffix}.mp4`;
+  const filename = `turntall-output-${suffix}.mp4`;
   const handle = await directory.getFileHandle(filename, {
     create: true,
   });

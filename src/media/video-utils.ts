@@ -45,6 +45,27 @@ export function sameDisplayedTime(first, second) {
   );
 }
 
+export function presentedFrameTime(
+  currentTime,
+  mediaTime,
+  frameRate,
+) {
+  if (!Number.isFinite(currentTime)) {
+    return Number.isFinite(mediaTime) ? mediaTime : 0;
+  }
+  if (!Number.isFinite(mediaTime)) {
+    return currentTime;
+  }
+
+  const frameDuration =
+    Number.isFinite(frameRate) && frameRate > 0
+      ? 1 / frameRate
+      : 1 / 30;
+  return Math.abs(mediaTime - currentTime) <= frameDuration * 1.5
+    ? mediaTime
+    : currentTime;
+}
+
 export function frameStepTime(
   currentTime,
   direction,

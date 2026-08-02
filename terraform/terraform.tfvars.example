@@ -1,0 +1,18 @@
+aws_region         = "eu-west-3"
+project_name       = "turntall"
+resource_prefix    = "turntall"
+github_owner       = "faaabio1618"
+github_repository  = "turntall"
+github_environment = "production"
+
+# If this private repository uses GitHub's immutable OIDC subject format,
+# set both numeric IDs to pin the trust policy without wildcard IDs.
+# github_owner_id      = 12345678
+# github_repository_id = 123456789
+
+# IAM has one GitHub OIDC provider per AWS account. Set this to false when
+# https://token.actions.githubusercontent.com is already managed elsewhere.
+create_github_oidc_provider = true
+
+force_destroy_bucket = false
+cloudfront_price_class = "PriceClass_100"

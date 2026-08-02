@@ -139,7 +139,7 @@ export function subjectTimeBounds(references) {
   };
 }
 
-export function subjectBoxAtTime(references, time, jumpTolerance = 0.005) {
+export function subjectBoxAtTime(references, time, jumpTolerance = 0) {
   const points = (references ?? [])
     .filter(
       (reference) =>

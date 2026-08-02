@@ -1,5 +1,5 @@
 {
-  "name": "giftiger",
+  "name": "turntall",
   "version": "1.0.0",
   "description": "Local-first browser video editor powered by WebAssembly and native WebCodecs",
   "type": "module",

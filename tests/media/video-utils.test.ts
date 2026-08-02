@@ -11,6 +11,7 @@ import {
   nearestKeyframe,
   normalizeKeyframes,
   parseFramecrcKeyframes,
+  presentedFrameTime,
   sameDisplayedTime,
   spaceShortcutAction,
   suggestedTrackingFrameSkip,
@@ -51,6 +52,19 @@ describe("time and size formatting", () => {
     expect(sameDisplayedTime(12.344, "12.34")).toBe(true);
     expect(sameDisplayedTime(12.346, "12.34")).toBe(false);
     expect(sameDisplayedTime(Number.NaN, "12.34")).toBe(false);
+  });
+
+  it("uses the decoded timestamp for the frame actually being shown", () => {
+    expect(presentedFrameTime(5.02, 5, 30)).toBe(5);
+  });
+
+  it("ignores stale decoded-frame metadata after a distant seek", () => {
+    expect(presentedFrameTime(8, 5, 30)).toBe(8);
+  });
+
+  it("falls back safely when decoded-frame metadata is unavailable", () => {
+    expect(presentedFrameTime(3.25, undefined, 30)).toBe(3.25);
+    expect(presentedFrameTime(Number.NaN, 2, 30)).toBe(2);
   });
 });
 

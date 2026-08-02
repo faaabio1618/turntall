@@ -5,7 +5,7 @@ import {
   ExternalLink,
   Info,
   LoaderCircle,
-  PawPrint,
+  RectangleVertical,
   Pause,
   Play,
   RotateCcw,
@@ -23,7 +23,7 @@ import {
 
 const ICONS = {
   arrowRight: ArrowRight,
-  brand: PawPrint,
+  brand: RectangleVertical,
   close: X,
   copy: Copy,
   download: Download,

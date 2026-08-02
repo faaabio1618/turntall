@@ -21,7 +21,7 @@ async function openSupportedApp(page) {
   });
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "GifTiger", level: 1 }),
+    page.getByRole("heading", { name: "turntall.com", level: 1 }),
   ).toBeVisible();
   await expect(page.locator("#browser-gate")).not.toBeVisible();
 }
@@ -396,6 +396,56 @@ test("tracks the selected subject through decoded frames", async ({ page }) => {
   });
   await expect(page.locator(".subject-reference")).not.toHaveCount(0);
   await expect(page.locator("#preview")).toHaveJSProperty("paused", true);
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("does not reseek when redrawing a tracked frame after stepping back", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+
+  await page.getByRole("button", { name: /Track subject/ }).click();
+  await expect(page.locator("#stop-following")).toBeHidden({
+    timeout: 30_000,
+  });
+
+  const preview = page.locator("#preview");
+  await preview.focus();
+  for (let frame = 0; frame < 30; frame += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+  await expect.poll(() => preview.evaluate((video) => video.seeking)).toBe(
+    false,
+  );
+  await preview.evaluate((video) => {
+    video.dataset.correctionSeekCount = "0";
+    video.addEventListener(
+      "seeking",
+      () => {
+        video.dataset.correctionSeekCount = String(
+          Number(video.dataset.correctionSeekCount) + 1,
+        );
+      },
+      { once: true },
+    );
+  });
+
+  await drawSubjectBox(page, {
+    left: 0.3,
+    top: 0.25,
+    right: 0.7,
+    bottom: 0.65,
+  });
+
+  await expect(page.locator("#subject-overlay")).toHaveClass(/active/);
+  await expect(preview).toHaveAttribute("data-correction-seek-count", "0");
   expect(runtimeErrors).toEqual([]);
 });
 

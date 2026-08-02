@@ -4,7 +4,7 @@ const baseURL = "http://127.0.0.1:4173";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "**/giftiger.e2e.ts",
+  testMatch: "**/turntall.e2e.ts",
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),

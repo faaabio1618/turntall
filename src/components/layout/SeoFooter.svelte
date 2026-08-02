@@ -3,7 +3,7 @@
       <h2 id="seo-heading">Cut and reframe videos in your browser</h2>
       <div class="seo-copy">
         <p>
-          GifTiger is a browser-based video cutter that processes your files
+          turntall.com is a browser-based video cutter that processes your files
           locally on your device. Trim a video and download the result without
           uploading or sharing the original file.
         </p>
@@ -22,6 +22,6 @@
     </section>
 
     <footer class="site-footer">
-      <span>GifTiger</span>
-      <a href="mailto:info@giftiger.app">info@giftiger.app</a>
+      <span>turntall.com</span>
+      <a href="mailto:info@turntall.com">info@turntall.com</a>
     </footer>

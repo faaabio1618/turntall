@@ -259,7 +259,7 @@ describe("saved subject box display", () => {
     ).toEqual(references[0].box);
   });
 
-  it("shows a new-position box within the same displayed frame", () => {
+  it("changes the box on the exact new-position frame", () => {
     expect(
       subjectBoxAtTime(
         [
@@ -267,6 +267,15 @@ describe("saved subject box display", () => {
           { ...references[1], jump: true },
         ],
         5.996,
+      ),
+    ).toEqual(references[0].box);
+    expect(
+      subjectBoxAtTime(
+        [
+          references[0],
+          { ...references[1], jump: true },
+        ],
+        6,
       ),
     ).toEqual(references[1].box);
   });

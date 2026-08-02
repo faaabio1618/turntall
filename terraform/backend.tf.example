@@ -1,0 +1,9 @@
+# Copy this file to backend.tf before the first init to use remote state.
+# The state bucket must already exist and must not be the application bucket.
+terraform {
+  backend "s3" {
+    key          = "turntall/production/terraform.tfstate"
+    encrypt      = true
+    use_lockfile = true
+  }
+}

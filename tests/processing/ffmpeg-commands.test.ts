@@ -90,13 +90,13 @@ describe("FFmpeg cut commands", () => {
       accurate: false,
     });
 
-    expect(args).toContain(
+    expect(args[args.indexOf("-vf") + 1]).toContain(
       "crop=810:1440:(iw-810)/2:(ih-1440)/2",
     );
     expect(args).toContain("libx264");
     expect(args).toContain("yuv420p");
     expect(args).toContain("-threads");
-    expect(args.indexOf("-ss")).toBeGreaterThan(args.indexOf("-i"));
+    expect(args.indexOf("-ss")).toBeLessThan(args.indexOf("-i"));
     expect(args).not.toContain("copy");
     expect(args).not.toContain("+faststart");
   });
@@ -117,6 +117,9 @@ describe("FFmpeg cut commands", () => {
     expect(filter).toContain("crop=810:1440:");
     expect(filter).toContain("if(lt(t\\,2)");
     expect(filter).not.toContain("(iw-810)/2");
+    expect(filter.indexOf("crop=")).toBeLessThan(
+      filter.indexOf("setpts=PTS-STARTPTS"),
+    );
   });
 
   it("removes the audio track when silent output is selected", () => {

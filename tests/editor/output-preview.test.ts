@@ -106,6 +106,29 @@ describe("output preview framing", () => {
       height: 720,
     });
   });
+
+  it("uses the new crop on the first frame of a new position", () => {
+    const references = [
+      {
+        time: 2,
+        box: { x: 0, y: 0, width: 0.2, height: 0.5 },
+      },
+      {
+        time: 5,
+        box: { x: 0.8, y: 0, width: 0.2, height: 0.5 },
+        jump: true,
+      },
+    ];
+
+    expect(
+      outputPreviewFrame({
+        ...base,
+        vertical: true,
+        currentTime: 5,
+        references,
+      }).left,
+    ).toBe(876);
+  });
 });
 
 describe("processing preview position", () => {

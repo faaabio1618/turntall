@@ -3,10 +3,10 @@
           <span id="brand-mark" class="brand-mark" aria-hidden="true"></span>
           <span>
             <small>Local video editor</small>
-            <h1>GifTiger</h1>
+            <h1>turntall.com</h1>
           </span>
         </div>
-        <ul class="intro" aria-label="What GifTiger does">
+        <ul class="intro" aria-label="What turntall.com does">
           <li>Trim video clips</li>
           <li>Create vertical videos</li>
           <li>Keep moving subjects in frame</li>
@@ -15,6 +15,6 @@
       </header>
 
       <aside id="mobile-warning" class="mobile-warning" role="alert" hidden>
-        GifTiger works best on desktop. Open this page on a computer to edit
+        turntall.com works best on desktop. Open this page on a computer to edit
         videos.
       </aside>

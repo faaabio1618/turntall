@@ -1,4 +1,4 @@
-# GifTiger code review
+# turntall.com code review
 
 Reviewed: 2026-08-01
 
@@ -12,7 +12,7 @@ combination was exercised.
 
 Validation performed:
 
-- `npm run test:coverage`: 200 tests passed with 96.46% statement coverage.
+- `npm run test:coverage`: 204 tests passed with 96.49% statement coverage.
 - The current Playwright suites: 13 editor tests and 1 production-bundle test
   passed in Chrome.
 - A synthetic 30-minute tracking path with 3,001 references generated a
@@ -121,7 +121,7 @@ Regression test:
 Evidence:
 
 - `src/processing/webcodecs-editor.ts:165-189` writes disk-backed outputs to the browser's
-  origin-private file system as `giftiger-output-*.mp4`.
+  origin-private file system as `turntall-output-*.mp4`.
 - `src/editor/controller.ts:3313` stores the returned cleanup callback.
 - `src/editor/controller.ts:2468-2479` runs it only when output is reset.
 - `src/editor/controller.ts:3829-3838` revokes object URLs on `beforeunload`, but does not
@@ -135,7 +135,7 @@ Recommendation:
 
 - Remove the OPFS entry as soon as a stable `File` snapshot has been obtained,
   if browser behavior permits it.
-- Otherwise keep a small registry of temporary names and clean stale GifTiger
+- Otherwise keep a small registry of temporary names and clean stale turntall.com
   outputs on application startup as well as on normal reset.
 - Do not rely only on asynchronous work inside `beforeunload`, because browsers
   do not guarantee its completion.
