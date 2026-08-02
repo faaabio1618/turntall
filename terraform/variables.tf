@@ -82,3 +82,36 @@ variable "cloudfront_price_class" {
     error_message = "cloudfront_price_class must be PriceClass_100, PriceClass_200, or PriceClass_All."
   }
 }
+
+variable "domain_name" {
+  description = "Apex domain served by the production CloudFront distribution."
+  type        = string
+  default     = "turntall.com"
+
+  validation {
+    condition     = can(regex("^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$", var.domain_name))
+    error_message = "domain_name must be a valid lowercase DNS name."
+  }
+}
+
+variable "cloudflare_zone_id" {
+  description = "Cloudflare Zone ID for domain_name. This identifier is not a secret."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{32}$", var.cloudflare_zone_id))
+    error_message = "cloudflare_zone_id must be a 32-character hexadecimal Cloudflare Zone ID."
+  }
+}
+
+variable "include_www_domain" {
+  description = "Serve the production site from both the apex domain and www."
+  type        = bool
+  default     = true
+}
+
+variable "cloudflare_proxy_enabled" {
+  description = "Proxy site records through Cloudflare. DNS-only is recommended because CloudFront already provides the CDN."
+  type        = bool
+  default     = false
+}

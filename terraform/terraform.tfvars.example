@@ -16,3 +16,10 @@ create_github_oidc_provider = true
 
 force_destroy_bucket = false
 cloudfront_price_class = "PriceClass_100"
+
+# Find this value in Cloudflare under turntall.com > Overview > API > Zone ID.
+cloudflare_zone_id = "0123456789abcdef0123456789abcdef"
+
+domain_name             = "turntall.com"
+include_www_domain      = true
+cloudflare_proxy_enabled = false

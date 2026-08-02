@@ -1,0 +1,79 @@
+name: Terraform production
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Terraform operation
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-infrastructure
+  cancel-in-progress: false
+
+jobs:
+  terraform:
+    name: Terraform ${{ inputs.operation }}
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      TF_VAR_cloudflare_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.14.3
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.2
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: turntall-production-terraform
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check required production configuration
+        shell: bash
+        run: |
+          test -n "${CLOUDFLARE_API_TOKEN}"
+          test -n "${TF_VAR_cloudflare_zone_id}"
+
+      - name: Initialize Terraform
+        run: terraform init -input=false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+
+      - name: Validate configuration
+        run: terraform validate -no-color
+
+      - name: Plan production infrastructure
+        run: terraform plan -input=false -lock-timeout=5m -out=production.tfplan -no-color
+
+      - name: Apply production infrastructure
+        if: ${{ inputs.operation == 'apply' }}
+        run: terraform apply -input=false -lock-timeout=5m -auto-approve production.tfplan
+
+      - name: Publish production outputs
+        if: ${{ inputs.operation == 'apply' }}
+        shell: bash
+        run: |
+          echo "### Production infrastructure" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- Site: $(terraform output -raw site_url)" >> "${GITHUB_STEP_SUMMARY}"
+          echo "- CloudFront: $(terraform output -raw cloudfront_domain_name)" >> "${GITHUB_STEP_SUMMARY}"

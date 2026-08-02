@@ -1,5 +1,6 @@
 locals {
-  resource_name = "${var.resource_prefix}-prod"
+  resource_name               = "${var.resource_prefix}-prod"
+  terraform_state_bucket_name = "${var.resource_prefix}-tfstate-${data.aws_caller_identity.current.account_id}-${var.aws_region}"
 
   github_legacy_subject = "repo:${var.github_owner}/${var.github_repository}:environment:${var.github_environment}"
   github_immutable_subject = (
@@ -135,6 +136,7 @@ resource "aws_cloudfront_response_headers_policy" "site" {
 }
 
 resource "aws_cloudfront_distribution" "site" {
+  aliases             = local.site_domain_names
   enabled             = true
   comment             = "${local.resource_name} static site"
   default_root_object = "index.html"
@@ -179,7 +181,9 @@ resource "aws_cloudfront_distribution" "site" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.site.certificate_arn
+    minimum_protocol_version = "TLSv1.2_2021"
+    ssl_support_method       = "sni-only"
   }
 }
 
@@ -283,6 +287,96 @@ data "aws_iam_policy_document" "github_deploy" {
   statement {
     sid       = "InvalidateProductionDistribution"
     actions   = ["cloudfront:CreateInvalidation"]
+    resources = [aws_cloudfront_distribution.site.arn]
+  }
+
+  statement {
+    sid = "ReadTerraformStateBucket"
+    actions = [
+      "s3:GetBucketLocation",
+      "s3:ListBucket",
+    ]
+    resources = ["arn:aws:s3:::${local.terraform_state_bucket_name}"]
+  }
+
+  statement {
+    sid = "ManageTerraformStateObjects"
+    actions = [
+      "s3:DeleteObject",
+      "s3:GetObject",
+      "s3:PutObject",
+    ]
+    resources = ["arn:aws:s3:::${local.terraform_state_bucket_name}/turntall/production/terraform.tfstate*"]
+  }
+
+  statement {
+    sid = "ReadProductionCloudFront"
+    actions = [
+      "cloudfront:Get*",
+      "cloudfront:List*",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ReadProductionIAM"
+    actions = [
+      "iam:GetOpenIDConnectProvider",
+      "iam:GetRole",
+      "iam:GetRolePolicy",
+      "iam:ListAttachedRolePolicies",
+      "iam:ListInstanceProfilesForRole",
+      "iam:ListOpenIDConnectProviderTags",
+      "iam:ListRolePolicies",
+      "iam:ListRoleTags",
+    ]
+    resources = [
+      aws_iam_role.github_deploy.arn,
+      local.github_oidc_provider_arn,
+    ]
+  }
+
+  statement {
+    sid = "ReadProductionStorage"
+    actions = [
+      "s3:Get*",
+      "s3:List*",
+    ]
+    resources = [
+      aws_s3_bucket.site.arn,
+      "${aws_s3_bucket.site.arn}/*",
+      "arn:aws:s3:::${local.terraform_state_bucket_name}",
+      "arn:aws:s3:::${local.terraform_state_bucket_name}/turntall/production/terraform.tfstate*",
+    ]
+  }
+
+  statement {
+    sid = "ReadProductionCertificates"
+    actions = [
+      "acm:DescribeCertificate",
+      "acm:ListTagsForCertificate",
+    ]
+    resources = ["arn:aws:acm:us-east-1:${data.aws_caller_identity.current.account_id}:certificate/*"]
+  }
+
+  statement {
+    sid = "ManageProductionDomainCertificate"
+    actions = [
+      "acm:AddTagsToCertificate",
+      "acm:DeleteCertificate",
+      "acm:RemoveTagsFromCertificate",
+      "acm:RequestCertificate",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ConfigureProductionCloudFrontDomain"
+    actions = [
+      "cloudfront:TagResource",
+      "cloudfront:UntagResource",
+      "cloudfront:UpdateDistribution",
+    ]
     resources = [aws_cloudfront_distribution.site.arn]
   }
 }

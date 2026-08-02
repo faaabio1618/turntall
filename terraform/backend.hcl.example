@@ -1,2 +1,0 @@
-bucket = "replace-with-your-terraform-state-bucket"
-region = "eu-west-3"

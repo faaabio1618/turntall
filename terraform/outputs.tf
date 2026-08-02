@@ -14,13 +14,23 @@ output "cloudfront_distribution_id" {
 }
 
 output "cloudfront_domain_name" {
-  description = "Production site hostname."
+  description = "AWS-generated CloudFront hostname."
   value       = aws_cloudfront_distribution.site.domain_name
 }
 
 output "site_url" {
   description = "Production site URL."
-  value       = "https://${aws_cloudfront_distribution.site.domain_name}"
+  value       = "https://${var.domain_name}"
+}
+
+output "www_site_url" {
+  description = "Production www URL when the www alias is enabled."
+  value       = var.include_www_domain ? "https://www.${var.domain_name}" : null
+}
+
+output "acm_certificate_arn" {
+  description = "ACM certificate attached to CloudFront."
+  value       = aws_acm_certificate.site.arn
 }
 
 output "github_actions_role_arn" {
