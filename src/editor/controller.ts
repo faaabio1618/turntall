@@ -48,6 +48,7 @@ import {
   resizeBox,
   replaceSubjectReference,
   subjectBoxAtTime,
+  subjectReferenceAtTime,
   subjectReferencesAfter,
   subjectTimeBounds,
   trackingRestartRequiresDecision,
@@ -130,6 +131,7 @@ let previewMetadataReady = false;
 let keyframePreparationComplete = false;
 let keyframes = [];
 let sourceRevision = 0;
+let subjectOnboardingRevision = -1;
 let preparedInputName;
 let preparedRevision = -1;
 let trackingSpeedRecommendationApplied = false;
@@ -282,7 +284,28 @@ function finishVideoPreparation(revision) {
     keyframePreparationComplete
   ) {
     setVideoPreparationState(false);
+    showSubjectOnboarding(revision);
   }
+}
+
+function dismissSubjectOnboarding() {
+  elements.subjectOnboarding.classList.remove("active");
+}
+
+function showSubjectOnboarding(revision) {
+  if (
+    revision !== sourceRevision ||
+    revision === subjectOnboardingRevision ||
+    browserPreviewReadable !== true ||
+    mediaInfo?.canReencode === false
+  ) {
+    return;
+  }
+
+  subjectOnboardingRevision = revision;
+  elements.subjectOnboarding.classList.remove("active");
+  void elements.subjectOnboarding.offsetWidth;
+  elements.subjectOnboarding.classList.add("active");
 }
 
 function subjectEditState() {
@@ -387,14 +410,19 @@ function updateSubjectSurfaceRect() {
     sourceHeight,
   );
 
-  elements.subjectSurface.style.left = `${
-    previewRect.left - stageRect.left + contentRect.left
-  }px`;
-  elements.subjectSurface.style.top = `${
-    previewRect.top - stageRect.top + contentRect.top
-  }px`;
-  elements.subjectSurface.style.width = `${contentRect.width}px`;
-  elements.subjectSurface.style.height = `${contentRect.height}px`;
+  for (const surface of [
+    elements.subjectSurface,
+    elements.subjectOnboarding,
+  ]) {
+    surface.style.left = `${
+      previewRect.left - stageRect.left + contentRect.left
+    }px`;
+    surface.style.top = `${
+      previewRect.top - stageRect.top + contentRect.top
+    }px`;
+    surface.style.width = `${contentRect.width}px`;
+    surface.style.height = `${contentRect.height}px`;
+  }
   renderCropPreview();
   renderSavedSubjectBox();
 }
@@ -1289,6 +1317,7 @@ function beginSubjectSelection(
     return;
   }
 
+  dismissSubjectOnboarding();
   if (mediaInfo?.canReencode !== false) {
     elements.verticalMode.checked = true;
   }
@@ -1307,12 +1336,13 @@ function beginSubjectSelection(
     requestedReference ??
     (forceNew
       ? undefined
-      : subjectReferences.find((item) =>
-          sameDisplayedTime(item.time, currentTime),
-        ));
+      : subjectReferenceAtTime(subjectReferences, currentTime, {
+          duration,
+          frameRate: mediaInfo?.frameRate,
+        }));
 
   editingSubjectId = reference?.id;
-  subjectSelectionTime = requestedReference?.time ?? currentTime;
+  subjectSelectionTime = reference?.time ?? currentTime;
   previousSubjectBoxBeforeDraw = trackingLiveBox
     ? { ...trackingLiveBox }
     : subjectBoxAtTime(subjectReferences, subjectSelectionTime);
@@ -2092,6 +2122,7 @@ function beginPreviewSubjectGesture(event) {
     return;
   }
 
+  dismissSubjectOnboarding();
   previewSubjectGesture = {
     pointerId: event.pointerId,
     startClientX: event.clientX,
@@ -2256,6 +2287,7 @@ function updateMode() {
     elements.verticalMode.checked = true;
   }
   const vertical = elements.verticalMode.checked;
+  elements.outputPreviewStage.classList.toggle("vertical", vertical);
   const streamingInput = mediaInfo?.streamingInput === true;
   const subjectGuided = vertical && subjectReferences.length > 0;
   const cropSize = centeredVerticalSize(sourceWidth, sourceHeight);
@@ -3611,6 +3643,7 @@ elements.fileInput.addEventListener("change", () => {
   }
 
   sourceRevision += 1;
+  dismissSubjectOnboarding();
   releaseLoadedVideo();
   selectedFile = file;
   stopProcessingEstimate();
@@ -3731,6 +3764,7 @@ elements.preview.addEventListener("seeking", () => {
   scheduleCropPreviewFrame(true);
 });
 elements.preview.addEventListener("play", () => {
+  dismissSubjectOnboarding();
   pauseOutputPreview();
   scheduleCropPreviewFrame();
 });

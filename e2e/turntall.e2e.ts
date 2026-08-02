@@ -163,6 +163,23 @@ test("loads a local video, updates the segment, and previews it", async ({
   await expect(page.locator("#set-end")).toHaveText("Use current");
   await expect(page.locator("#video-speed-value")).toHaveText("1×");
   await expect(page.locator(".output-speed-scale")).toHaveCount(0);
+  await expect(page.locator("#subject-onboarding")).toHaveClass(
+    /active/,
+  );
+  await expect(page.locator(".subject-onboarding-box")).toHaveCSS(
+    "animation-name",
+    "subject-onboarding-box",
+  );
+
+  const outputPreviewStage = page.locator(".output-preview-stage");
+  await page.locator("#vertical-mode").check();
+  await expect(outputPreviewStage).toHaveClass(/vertical/);
+  const verticalPreviewBounds = await outputPreviewStage.boundingBox();
+  expect(verticalPreviewBounds).not.toBeNull();
+  expect(
+    verticalPreviewBounds.width / verticalPreviewBounds.height,
+  ).toBeCloseTo(9 / 16, 2);
+  await page.locator("#vertical-mode").uncheck();
 
   const sourceVideo = page.locator("#preview");
   await sourceVideo.click({ position: { x: 80, y: 80 } });
@@ -446,6 +463,38 @@ test("does not reseek when redrawing a tracked frame after stepping back", async
 
   await expect(page.locator("#subject-overlay")).toHaveClass(/active/);
   await expect(preview).toHaveAttribute("data-correction-seek-count", "0");
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("does not ask to delete boxes when redrawing the final tracked frame", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+
+  await page.getByRole("button", { name: /Track subject/ }).click();
+  const stop = page.locator("#stop-following");
+  await expect(stop).toBeVisible();
+  await expect(stop).toBeHidden({ timeout: 30_000 });
+
+  await drawSubjectBox(page, {
+    left: 0.3,
+    top: 0.25,
+    right: 0.7,
+    bottom: 0.65,
+  });
+  await page.locator("#confirm-subject").click();
+
+  await expect(page.locator("#later-subject-dialog")).toBeHidden();
+  await expect(page.locator("#subject-overlay")).not.toHaveClass(
+    /active/,
+  );
   expect(runtimeErrors).toEqual([]);
 });
 

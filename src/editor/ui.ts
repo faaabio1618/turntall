@@ -97,6 +97,7 @@ export function collectUiElements(root = document) {
     frameStepHelp: get("#frame-step-help"),
     cropPreview: get("#crop-preview"),
     previewFrameIndicator: get("#preview-frame-indicator"),
+    subjectOnboarding: get("#subject-onboarding"),
     subjectOverlay: get("#subject-overlay"),
     subjectInstruction: get("#subject-instruction"),
     subjectSurface: get("#subject-surface"),

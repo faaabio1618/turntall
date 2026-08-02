@@ -1,4 +1,4 @@
-import { clamp } from "../media/video-utils.ts";
+import { clamp, sameDisplayedTime } from "../media/video-utils.ts";
 
 export const MIN_SUBJECT_BOX_SIZE = 0.04;
 
@@ -193,6 +193,38 @@ export function subjectReferencesAfter(
       reference.id !== excludedId &&
       Number.isFinite(reference.time) &&
       reference.time > time + tolerance,
+  );
+}
+
+export function subjectReferenceAtTime(
+  references,
+  time,
+  {
+    duration,
+    frameRate,
+  }: { duration?: number; frameRate?: number } = {},
+) {
+  const candidates = (references ?? [])
+    .filter((reference) => Number.isFinite(reference.time))
+    .sort((left, right) => left.time - right.time);
+  const lastReference = candidates.at(-1);
+  const frameDuration =
+    Number.isFinite(frameRate) && frameRate > 0
+      ? 1 / frameRate
+      : 1 / 30;
+  const isTerminalTrackedFrame =
+    lastReference?.automatic === true &&
+    Number.isFinite(duration) &&
+    lastReference.time >= duration - 0.005 &&
+    time < lastReference.time &&
+    lastReference.time - time <= frameDuration * 1.1;
+
+  if (isTerminalTrackedFrame) {
+    return lastReference;
+  }
+
+  return candidates.find((reference) =>
+    sameDisplayedTime(reference.time, time),
   );
 }
 

@@ -48,6 +48,17 @@
             hidden
           ></output>
           <div
+            id="subject-onboarding"
+            class="subject-onboarding"
+            aria-hidden="true"
+          >
+            <span class="subject-onboarding-label">
+              Drag to select a subject
+            </span>
+            <span class="subject-onboarding-box"></span>
+            <span class="subject-onboarding-cursor"></span>
+          </div>
+          <div
             id="subject-overlay"
             class="subject-overlay"
             aria-hidden="true"

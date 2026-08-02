@@ -10,6 +10,7 @@ import {
   replaceSubjectReference,
   resizeBox,
   subjectBoxAtTime,
+  subjectReferenceAtTime,
   subjectReferencesAfter,
   subjectTimeBounds,
   trackingRestartRequiresDecision,
@@ -144,6 +145,43 @@ describe("replacing an earlier subject frame", () => {
     expect(
       replaceSubjectReference(references, replacement, true),
     ).toEqual([references[0], replacement]);
+  });
+});
+
+describe("matching the selected subject frame", () => {
+  const terminalReference = {
+    id: 3,
+    time: 3,
+    automatic: true,
+    box: { x: 0.3 },
+  };
+
+  it("matches the decoded final frame to its terminal tracking box", () => {
+    expect(
+      subjectReferenceAtTime(
+        [
+          { id: 1, time: 0, box: { x: 0.1 } },
+          {
+            id: 2,
+            time: 2.9667,
+            automatic: true,
+            box: { x: 0.2 },
+          },
+          terminalReference,
+        ],
+        2.9667,
+        { duration: 3, frameRate: 30 },
+      ),
+    ).toBe(terminalReference);
+  });
+
+  it("does not treat an earlier frame as the terminal tracking box", () => {
+    expect(
+      subjectReferenceAtTime([terminalReference], 2.9, {
+        duration: 3,
+        frameRate: 30,
+      }),
+    ).toBeUndefined();
   });
 });
 
