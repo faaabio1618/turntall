@@ -5,6 +5,7 @@ const PYTRACKER_GAUSSIAN_SIGMA = 5;
 const PYTRACKER_GAUSSIAN_TRUNCATE = 4;
 const PYTRACKER_MOVEMENT_THRESHOLD_PX = 15;
 const MAXIMUM_CROP_SPEED_WIDTHS_PER_SECOND = 0.35;
+export const CROP_STABILIZATION_WINDOW_SECONDS = 0.8;
 
 function centeredCropPosition(
   sourceWidth,
@@ -124,6 +125,99 @@ function gaussianAutomaticLefts(points, sigma) {
   return smoothed;
 }
 
+function gaussianAutomaticLeftsByTime(points, windowSeconds) {
+  const smoothed = points.map((point) => point.left);
+  const sigmaSeconds = windowSeconds / PYTRACKER_GAUSSIAN_TRUNCATE;
+  if (points.length < 2 || sigmaSeconds <= 0) {
+    return smoothed;
+  }
+
+  let segmentStart = 0;
+  const smoothSegment = (segmentEnd) => {
+    const segment = points.slice(segmentStart, segmentEnd);
+    for (let localIndex = 0; localIndex < segment.length; localIndex += 1) {
+      const point = segment[localIndex];
+      let weightedTotal = 0;
+      let weightTotal = 0;
+      for (
+        let neighborIndex = 0;
+        neighborIndex < segment.length;
+        neighborIndex += 1
+      ) {
+        const neighbor = segment[neighborIndex];
+        const elapsed = Math.abs(neighbor.time - point.time);
+        if (elapsed > windowSeconds + TIME_EPSILON) {
+          continue;
+        }
+        const previousTime =
+          segment[neighborIndex - 1]?.time ?? neighbor.time;
+        const nextTime =
+          segment[neighborIndex + 1]?.time ?? neighbor.time;
+        const representedDuration = Math.max(
+          TIME_EPSILON,
+          (nextTime - previousTime) / 2,
+        );
+        const weight =
+          Math.exp(-(elapsed ** 2) / (2 * sigmaSeconds ** 2)) *
+          representedDuration;
+        weightedTotal += neighbor.left * weight;
+        weightTotal += weight;
+      }
+      smoothed[segmentStart + localIndex] =
+        weightTotal > 0 ? weightedTotal / weightTotal : point.left;
+    }
+  };
+
+  for (let index = 1; index <= points.length; index += 1) {
+    if (index === points.length || points[index].jump) {
+      smoothSegment(index);
+      segmentStart = index;
+    }
+  }
+
+  return smoothed;
+}
+
+function cropPointIsAdjustable(point) {
+  return point.automatic && !point.cropLocked && !point.jump;
+}
+
+function subjectVisibleCropRange(
+  reference,
+  sourceWidth,
+  cropWidth,
+) {
+  if (!reference?.box || sourceWidth <= 0 || cropWidth <= 0) {
+    return undefined;
+  }
+
+  const maximumCropLeft = Math.max(0, sourceWidth - cropWidth);
+  const subjectLeft = reference.box.x * sourceWidth;
+  const subjectRight =
+    (reference.box.x + reference.box.width) * sourceWidth;
+  const minimumLeft = clamp(
+    subjectRight - cropWidth,
+    0,
+    maximumCropLeft,
+  );
+  const maximumLeft = clamp(
+    subjectLeft,
+    0,
+    maximumCropLeft,
+  );
+
+  if (minimumLeft <= maximumLeft) {
+    return { minimumLeft, maximumLeft };
+  }
+
+  const centeredLeft = clamp(
+    (subjectLeft + subjectRight - cropWidth) / 2,
+    0,
+    maximumCropLeft,
+  );
+  return { minimumLeft: centeredLeft, maximumLeft: centeredLeft };
+}
+
 function limitAutomaticCropSpeed(points, maximumSpeed) {
   if (
     points.length < 2 ||
@@ -139,7 +233,7 @@ function limitAutomaticCropSpeed(points, maximumSpeed) {
     const neighbor = limited[neighborIndex];
     const crossesJump =
       index > neighborIndex ? point.jump : neighbor.jump;
-    if (!point.automatic || point.jump || crossesJump) {
+    if (!cropPointIsAdjustable(point) || crossesJump) {
       return false;
     }
 
@@ -212,36 +306,58 @@ export function smoothAutomaticCropPositions(
   sigma = PYTRACKER_GAUSSIAN_SIGMA,
   movementThreshold = PYTRACKER_MOVEMENT_THRESHOLD_PX,
   maximumSpeed = Number.POSITIVE_INFINITY,
+  stabilizationWindowSeconds = undefined,
 ) {
   if (points.length < 2) {
     return points.map((point) => ({ ...point }));
   }
 
-  const smoothedLeft = gaussianAutomaticLefts(
-    points,
-    Math.max(0, sigma),
-  );
+  const smoothedLeft = Number.isFinite(stabilizationWindowSeconds)
+    ? gaussianAutomaticLeftsByTime(
+        points,
+        Math.max(0, stabilizationWindowSeconds),
+      )
+    : gaussianAutomaticLefts(points, Math.max(0, sigma));
   const gaussianCandidates = points.map((point, index) =>
-    point.automatic && !point.jump
+    cropPointIsAdjustable(point)
       ? { ...point, left: smoothedLeft[index] }
       : { ...point },
   );
   const candidates = limitAutomaticCropSpeed(
     gaussianCandidates,
     maximumSpeed,
+  ).map((point) =>
+    cropPointIsAdjustable(point) &&
+    Number.isFinite(point.minimumLeft) &&
+    Number.isFinite(point.maximumLeft)
+      ? {
+          ...point,
+          left: clamp(
+            point.left,
+            point.minimumLeft,
+            point.maximumLeft,
+          ),
+        }
+      : point,
   );
   const stabilized = [{ ...candidates[0] }];
   let committedLeft = stabilized[0].left;
 
   for (let index = 1; index < candidates.length; index += 1) {
     const point = candidates[index];
-    const automatic = point.automatic && !point.jump;
+    const automatic = cropPointIsAdjustable(point);
     const moved =
       Math.abs(point.left - committedLeft) >
       Math.max(0, movementThreshold);
+    const mustMoveToKeepSubjectVisible =
+      automatic &&
+      Number.isFinite(point.minimumLeft) &&
+      Number.isFinite(point.maximumLeft) &&
+      (committedLeft < point.minimumLeft - TIME_EPSILON ||
+        committedLeft > point.maximumLeft + TIME_EPSILON);
     const isLast = index === candidates.length - 1;
 
-    if (!automatic || moved) {
+    if (!automatic || moved || mustMoveToKeepSubjectVisible) {
       stabilized.push({ ...point });
       committedLeft = point.left;
     } else if (isLast) {
@@ -263,15 +379,28 @@ export function stabilizeTrackedReferences(
     sigma = PYTRACKER_GAUSSIAN_SIGMA,
     movementThreshold = undefined,
     maximumSpeed = undefined,
+    stabilizationWindowSeconds = CROP_STABILIZATION_WINDOW_SECONDS,
+    fixedBeforeTime = undefined,
   },
 ) {
   const positioned = references.map((reference, sampleIndex) => {
-    const rawReference = reference.automatic
+    const cropLocked =
+      reference.automatic &&
+      Number.isFinite(reference.cropLeft) &&
+      Number.isFinite(fixedBeforeTime) &&
+      reference.time <= fixedBeforeTime + TIME_EPSILON;
+    const rawReference = reference.automatic && !cropLocked
       ? { ...reference, cropLeft: undefined }
       : reference;
     return {
       ...reference,
       sampleIndex,
+      cropLocked,
+      ...subjectVisibleCropRange(
+        reference,
+        sourceWidth,
+        cropSize.width,
+      ),
       ...subjectCropPosition(
         rawReference,
         sourceWidth,
@@ -293,6 +422,7 @@ export function stabilizeTrackedReferences(
     Number.isFinite(maximumSpeed)
       ? maximumSpeed
       : sourceWidth * MAXIMUM_CROP_SPEED_WIDTHS_PER_SECOND,
+    stabilizationWindowSeconds,
   ).map((point) => ({
     ...references[point.sampleIndex],
     cropLeft: point.left,

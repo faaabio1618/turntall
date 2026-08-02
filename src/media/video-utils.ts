@@ -249,5 +249,5 @@ export function isKeyframeBoundary(
 }
 
 export function suggestedTrackingFrameSkip(frameRate) {
-  return Number.isFinite(frameRate) && frameRate > 50 ? 6 : 1;
+  return Number.isFinite(frameRate) && frameRate > 50 ? 4 : 1;
 }

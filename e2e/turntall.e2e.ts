@@ -370,6 +370,117 @@ test("draws, saves, and clears a subject position safely", async ({
   expect(runtimeErrors).toEqual([]);
 });
 
+test("hides a saved subject box before its first frame", async ({ page }) => {
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+
+  const preview = page.locator("#preview");
+  for (let step = 0; step < 10; step += 1) {
+    await page.keyboard.press("ArrowRight");
+  }
+  await expect
+    .poll(() => preview.evaluate((video) => video.currentTime))
+    .toBeGreaterThan(0.03);
+  const savedTime = await preview.evaluate((video) => video.currentTime);
+
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+  await expect(page.locator("#saved-subject-box")).toBeVisible();
+
+  for (let step = 0; step < 15; step += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+  await expect
+    .poll(() => preview.evaluate((video) => video.currentTime))
+    .toBeLessThan(savedTime - 0.01);
+  await expect(page.locator("#saved-subject-box")).toBeHidden();
+  await expect(page.locator("#crop-preview")).toBeHidden();
+  await expect(page.locator("#tracking-status")).toBeHidden();
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("hides a saved subject box after its last frame", async ({ page }) => {
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+  await expect(page.locator("#saved-subject-box")).toBeVisible();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#saved-subject-box")).toBeHidden();
+  await expect(page.locator("#crop-preview")).toBeHidden();
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("warns before leaving only when subject frames are saved", async ({
+  page,
+}) => {
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+
+  const exitWouldBeBlocked = () =>
+    page.evaluate(() => {
+      const event = new Event("beforeunload", { cancelable: true });
+      window.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+
+  expect(await exitWouldBeBlocked()).toBe(false);
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+  expect(await exitWouldBeBlocked()).toBe(true);
+
+  await page.locator("#clear-subject").click();
+  await page
+    .locator("#clear-subject-dialog")
+    .getByRole("button", { name: "Clear all" })
+    .click();
+  await expect(page.locator(".subject-reference")).toHaveCount(0);
+  expect(await exitWouldBeBlocked()).toBe(false);
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("confirms before replacing a video with saved subject frames", async ({
+  page,
+}) => {
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+
+  const fileInput = page.locator("#file-input");
+  const dialog = page.locator("#replace-video-dialog");
+  await fileInput.setInputFiles([]);
+  await fileInput.setInputFiles(VIDEO_FIXTURE);
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator(".subject-reference")).toHaveCount(1);
+
+  await fileInput.setInputFiles(VIDEO_FIXTURE);
+  await expect(dialog).toBeVisible();
+  await dialog
+    .getByRole("button", { name: "Replace video" })
+    .click();
+  await expect(page.locator(".subject-reference")).toHaveCount(0);
+  await expect(page.locator("#video-preparation-overlay")).toBeHidden({
+    timeout: 30_000,
+  });
+  expect(runtimeErrors).toEqual([]);
+});
+
 test("Spacebar saves, starts, and stops the primary subject action", async ({
   page,
 }) => {
@@ -390,8 +501,20 @@ test("Spacebar saves, starts, and stops the primary subject action", async ({
   await page.keyboard.press("Space");
   const stop = page.locator("#stop-following");
   await expect(stop).toBeVisible();
+  await expect(page.locator("#crop-preview")).toHaveClass(
+    /provisional/,
+  );
+  await expect(page.locator("#crop-preview-label")).toHaveText(
+    "Stabilizing",
+  );
+  await expect(page.locator("#tracking-stabilization-tail")).toBeVisible();
   await page.keyboard.press("Space");
   await expect(stop).toBeHidden({ timeout: 30_000 });
+  await expect(page.locator("#crop-preview")).not.toHaveClass(
+    /provisional/,
+  );
+  await expect(page.locator("#crop-preview-label")).toHaveText("Crop");
+  await expect(page.locator("#tracking-stabilization-tail")).toBeHidden();
   expect(runtimeErrors).toEqual([]);
 });
 
@@ -417,6 +540,39 @@ test("an arrow always leaves subject selection and steps one frame", async ({
   await expect
     .poll(() => preview.evaluate((video) => video.currentTime))
     .toBeCloseTo(timeBeforeArrow + 1 / 30, 2);
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("keeps the viewing message on the presented frame", async ({
+  page,
+}) => {
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+  const preview = page.locator("#preview");
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+
+  await page.keyboard.press("ArrowRight");
+  await drawSubjectBox(page);
+  await page.locator("#confirm-subject").click();
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(async () => {
+      const status = await page
+        .locator("#tracking-status-message")
+        .textContent();
+      const indicator = await page
+        .locator("#preview-frame-indicator")
+        .textContent();
+      const statusFrame = status?.match(/frame (\d+)/i)?.[1];
+      const indicatorFrame = indicator?.match(/Frame (\d+)/)?.[1];
+      return Boolean(statusFrame) && statusFrame === indicatorFrame;
+    })
+    .toBe(true);
   expect(runtimeErrors).toEqual([]);
 });
 
@@ -469,6 +625,7 @@ test("resumes from the frame reached by Stop without asking for a redraw", async
 
   await page.getByRole("button", { name: /Track subject/ }).click();
   await expect(page.locator("#restart-tracking-dialog")).toBeHidden();
+  await expect(stop).toBeVisible();
   await expect(stop).toBeHidden({ timeout: 30_000 });
   expect(runtimeErrors).toEqual([]);
 });

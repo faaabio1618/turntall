@@ -43,6 +43,24 @@
     </dialog>
 
     <dialog
+      id="replace-video-dialog"
+      aria-labelledby="replace-video-dialog-title"
+    >
+      <form method="dialog" class="confirmation-dialog">
+        <h2 id="replace-video-dialog-title">Replace this video?</h2>
+        <p>Saved subject frames will be lost.</p>
+        <div class="confirmation-dialog-actions">
+          <button value="cancel" type="submit" class="secondary">
+            Cancel
+          </button>
+          <button value="replace" type="submit" class="danger">
+            Replace video
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
       id="later-subject-dialog"
       aria-labelledby="later-subject-dialog-title"
     >

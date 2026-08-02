@@ -117,9 +117,9 @@ describe("frame stepping", () => {
 });
 
 describe("tracking speed suggestion", () => {
-  it("suggests 6× above 50 fps", () => {
-    expect(suggestedTrackingFrameSkip(50.01)).toBe(6);
-    expect(suggestedTrackingFrameSkip(60)).toBe(6);
+  it("suggests 4× above 50 fps", () => {
+    expect(suggestedTrackingFrameSkip(50.01)).toBe(4);
+    expect(suggestedTrackingFrameSkip(60)).toBe(4);
   });
 
   it("keeps 1× at 50 fps or below", () => {

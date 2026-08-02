@@ -6,6 +6,7 @@ import {
   createKeyframeScanArgs,
 } from "../processing/ffmpeg-commands.ts";
 import {
+  CROP_STABILIZATION_WINDOW_SECONDS,
   createCropTrajectory,
   cropRectangleAtTime,
   stabilizeTrackedReferences,
@@ -38,6 +39,7 @@ import { editingModeState } from "./editing-modes.ts";
 import { SubjectEditHistory } from "./editor-history.ts";
 import {
   MIN_SUBJECT_BOX_SIZE,
+  alignTimeToSubjectFrame,
   boxFromPoints,
   containedMediaRect,
   isDistantSubjectPosition,
@@ -134,6 +136,7 @@ let previewMetadataReady = false;
 let keyframePreparationComplete = false;
 let keyframes = [];
 let sourceRevision = 0;
+let pendingReplacementFile;
 let subjectOnboardingRevision = -1;
 let preparedInputName;
 let preparedRevision = -1;
@@ -159,10 +162,13 @@ let stopTrackingRequested = false;
 let pendingFrameStepAfterTracking = 0;
 let trackingLastGoodTime;
 let trackingRequestedStopTime;
+let trackingStoppedFrameTime;
 let trackingLiveBox;
+let trackingSessionAnchorTime;
 let trackingRequiresCorrection = false;
 let trackingConfidencePoints = [];
 let trackingConfidenceDisplayRange;
+let trackingStatusFollowsPreviewFrame = false;
 let suggestedSubjectJumpTime;
 let trackingCanvas;
 let previewControlsBeforeTracking = true;
@@ -210,9 +216,19 @@ function loadWebCodecsEditor() {
 }
 
 function selection() {
+  const start = Number(elements.startTime.value);
+  const end = Number(elements.endTime.value);
   return {
-    start: Number(elements.startTime.value),
-    end: Number(elements.endTime.value),
+    start: alignTimeToSubjectFrame(
+      subjectReferences,
+      start,
+      mediaInfo?.frameRate,
+    ),
+    end: alignTimeToSubjectFrame(
+      subjectReferences,
+      end,
+      mediaInfo?.frameRate,
+    ),
   };
 }
 
@@ -449,12 +465,16 @@ function sameSubjectFrame(first, second) {
 }
 
 function renderPreviewFrameIndicator() {
-  const frame = previewFrameNumber();
+  const previewTime = sourcePreviewTime();
+  const frame = previewFrameNumber(previewTime);
   elements.previewFrameIndicator.hidden =
     frame === undefined || elements.previewStage.hidden;
   if (frame !== undefined) {
     elements.previewFrameIndicator.value = `Frame ${frame}`;
     elements.previewFrameIndicator.textContent = `Frame ${frame}`;
+  }
+  if (trackingStatusFollowsPreviewFrame) {
+    renderViewingSubjectFrameStatus(previewTime);
   }
 }
 
@@ -471,20 +491,29 @@ function renderOutputPreviewFrameIndicator() {
 }
 
 function renderCropPreview() {
+  const previewTime = sourcePreviewTime();
+  const hasSubjectAtPreviewTime = Boolean(
+    (isTrackingSubject && trackingLiveBox) ||
+      subjectBoxAtTime(subjectReferences, previewTime),
+  );
   const visible =
     subjectReferences.length > 0 &&
+    hasSubjectAtPreviewTime &&
     !isSelectingSubject &&
     sourceWidth > 0 &&
     sourceHeight > 0 &&
     duration > 0 &&
     !elements.previewStage.hidden;
+  const provisional = isTrackingSubject && Boolean(trackingLiveBox);
+  elements.cropPreview.classList.toggle("provisional", provisional);
+  elements.cropPreviewLabel.textContent = provisional
+    ? "Stabilizing"
+    : "Crop";
   elements.cropPreview.hidden = !visible;
 
   if (!visible) {
     return;
   }
-
-  const previewTime = sourcePreviewTime();
 
   const stageRect = elements.previewStage.getBoundingClientRect();
   const previewRect = elements.preview.getBoundingClientRect();
@@ -511,6 +540,12 @@ function renderCropPreview() {
           sourceWidth,
           sourceHeight,
           cropSize,
+          fixedBeforeTime: Math.max(
+            Number.isFinite(trackingSessionAnchorTime)
+              ? trackingSessionAnchorTime
+              : Number.NEGATIVE_INFINITY,
+            previewTime - CROP_STABILIZATION_WINDOW_SECONDS,
+          ),
         },
       )
     : subjectReferences;
@@ -1032,12 +1067,37 @@ function renderTrackingBox() {
   elements.trackingBox.style.height = `${trackingLiveBox.height * 100}%`;
 }
 
-function setTrackingStatus(message = "", warning = false, shortcut = "") {
+function setTrackingStatus(
+  message = "",
+  warning = false,
+  shortcut = "",
+  followsPreviewFrame = false,
+) {
+  trackingStatusFollowsPreviewFrame = followsPreviewFrame;
   elements.trackingStatusMessage.textContent = message;
   elements.trackingStatusShortcut.textContent = shortcut;
   elements.trackingStatusShortcut.hidden = !shortcut;
   elements.trackingStatus.hidden = !message;
   elements.trackingStatus.classList.toggle("warning", warning);
+}
+
+function renderViewingSubjectFrameStatus(time) {
+  if (
+    subjectReferences.length === 0 ||
+    !subjectBoxAtTime(subjectReferences, time)
+  ) {
+    setTrackingStatus("", false, "", true);
+    return;
+  }
+
+  setTrackingStatus(
+    `Viewing ${subjectFrameLabel(
+      time,
+    )}. Drag around the subject to correct it, then save the subject position.`,
+    false,
+    "",
+    true,
+  );
 }
 
 function updateTrackingControls() {
@@ -1108,6 +1168,30 @@ function renderTrackingConfidencePlayhead() {
   }
 }
 
+function renderTrackingStabilizationTail() {
+  const range = trackingConfidenceDisplayRange;
+  const lastTime = trackingConfidencePoints.at(-1)?.time;
+  const visible =
+    isTrackingSubject &&
+    range &&
+    Number.isFinite(lastTime) &&
+    range.end > range.start;
+  elements.trackingStabilizationTail.hidden = !visible;
+  if (!visible) {
+    return;
+  }
+
+  const stableThrough = Math.max(
+    range.start,
+    lastTime - CROP_STABILIZATION_WINDOW_SECONDS,
+  );
+  elements.trackingStabilizationTail.style.left = `${clamp(
+    ((stableThrough - range.start) / (range.end - range.start)) * 100,
+    0,
+    100,
+  )}%`;
+}
+
 function renderTrackingConfidenceTimeline() {
   const points = trackingConfidencePoints;
   const hasEstimatedPoints = points.some((point) => !point.manual);
@@ -1117,6 +1201,7 @@ function renderTrackingConfidenceTimeline() {
   if (elements.trackingConfidence.hidden) {
     trackingConfidenceDisplayRange = undefined;
     elements.trackingConfidencePlayhead.hidden = true;
+    elements.trackingStabilizationTail.hidden = true;
     return;
   }
 
@@ -1172,6 +1257,7 @@ function renderTrackingConfidenceTimeline() {
     String(clamp(elements.preview.currentTime, start, lastTime)),
   );
   renderTrackingConfidencePlayhead();
+  renderTrackingStabilizationTail();
 }
 
 function recordTrackingConfidence(time, confidence, manual = false) {
@@ -1555,6 +1641,7 @@ function clearSubjectSelection(recordHistory = true) {
   subjectReferences = [];
   trackingConfidencePoints = [];
   trackingRequiresCorrection = false;
+  trackingStoppedFrameTime = undefined;
   trackingConfidenceDisplayRange = undefined;
   suggestedSubjectJumpTime = undefined;
   nextSubjectId = 1;
@@ -1664,13 +1751,17 @@ function yieldTrackingFrame(frameStartedAt, frameInterval) {
   );
 }
 
-function stabilizeSubjectPath(references) {
+function stabilizeSubjectPath(
+  references,
+  { fixedBeforeTime = undefined } = {},
+) {
   return stabilizeTrackedReferences(
     [...references].sort((left, right) => left.time - right.time),
     {
       sourceWidth,
       sourceHeight,
       cropSize: centeredVerticalSize(sourceWidth, sourceHeight),
+      fixedBeforeTime,
     },
   ).map((reference) => ({
     ...reference,
@@ -1679,7 +1770,7 @@ function stabilizeSubjectPath(references) {
   }));
 }
 
-function saveTrackedReferences(samples) {
+function saveTrackedReferences(samples, sessionAnchorTime) {
   let combinedReferences = [...subjectReferences];
 
   for (const sample of samples.slice(1)) {
@@ -1706,7 +1797,20 @@ function saveTrackedReferences(samples) {
     ];
   }
 
-  subjectReferences = stabilizeSubjectPath(combinedReferences);
+  const latestTime = combinedReferences
+    .filter((reference) => Number.isFinite(reference.time))
+    .sort((left, right) => left.time - right.time)
+    .at(-1)?.time;
+  subjectReferences = stabilizeSubjectPath(combinedReferences, {
+    fixedBeforeTime: Math.max(
+      Number.isFinite(sessionAnchorTime)
+        ? sessionAnchorTime
+        : Number.NEGATIVE_INFINITY,
+      Number.isFinite(latestTime)
+        ? latestTime - CROP_STABILIZATION_WINDOW_SECONDS
+        : Number.NEGATIVE_INFINITY,
+    ),
+  });
   applySubjectTimeBounds();
   updateSubjectSummary();
 }
@@ -1755,6 +1859,8 @@ async function followSubjectForward() {
       subjectReferences,
       currentTrackingTime,
       mediaInfo?.frameRate,
+      0.005,
+      trackingStoppedFrameTime,
     )
   ) {
     const decision = await requestTrackingRestartDecision(
@@ -1792,8 +1898,10 @@ async function followSubjectForward() {
   );
 
   recordSubjectEdit("automatic subject tracking");
+  trackingStoppedFrameTime = undefined;
   suggestedSubjectJumpTime = undefined;
   isTrackingSubject = true;
+  trackingSessionAnchorTime = anchor.time;
   stopTrackingRequested = false;
   pendingFrameStepAfterTracking = 0;
   trackingLiveBox = { ...anchor.box };
@@ -1817,6 +1925,7 @@ async function followSubjectForward() {
     "Press Space to stop",
   );
   renderTrackingBox();
+  renderTrackingStabilizationTail();
   updateTrackingControls();
   updateMode();
 
@@ -1959,7 +2068,7 @@ async function followSubjectForward() {
     stopReason = "error";
   } finally {
     if (trackedSamples.length > 1) {
-      saveTrackedReferences(trackedSamples);
+      saveTrackedReferences(trackedSamples, trackingSessionAnchorTime);
     }
 
     if (
@@ -1973,7 +2082,10 @@ async function followSubjectForward() {
       }
     }
 
+    trackingStoppedFrameTime =
+      stopReason === "stopped" ? sourcePreviewTime() : undefined;
     isTrackingSubject = false;
+    renderTrackingStabilizationTail();
     if (["scene", "confidence", "error"].includes(stopReason)) {
       trackingRequiresCorrection = true;
     }
@@ -1981,6 +2093,7 @@ async function followSubjectForward() {
     elements.preview.controls = previewControlsBeforeTracking;
     elements.preview.muted = previewMutedBeforeTracking;
     trackingLiveBox = undefined;
+    trackingSessionAnchorTime = undefined;
     stopTrackingRequested = false;
     trackingLastGoodTime = undefined;
     trackingRequestedStopTime = undefined;
@@ -2487,15 +2600,15 @@ function updateFrameStepControls() {
   }
 
   const highFrameRate = Number.isFinite(frameRate) && frameRate > 50;
-  const sixTimesOption = elements.trackingFrameSkip.querySelector(
-    'option[value="6"]',
+  const fourTimesOption = elements.trackingFrameSkip.querySelector(
+    'option[value="4"]',
   );
-  sixTimesOption.textContent = highFrameRate
-    ? "6× · Suggested"
-    : "6×";
+  fourTimesOption.textContent = highFrameRate
+    ? "4× · Suggested"
+    : "4×";
   elements.speedTooltip.dataset.tooltip = highFrameRate
-    ? `${Number(frameRate.toFixed(2))} fps detected · 6× suggested`
-    : "1× for fast-moving subjects · 6× for mostly steady subjects";
+    ? `${Number(frameRate.toFixed(2))} fps detected · 4× suggested`
+    : "1× for fast-moving subjects · 10× for very steady subjects";
   elements.speedTooltip.setAttribute(
     "aria-label",
     elements.speedTooltip.dataset.tooltip,
@@ -2548,12 +2661,13 @@ function stepPreviewFrame(direction) {
     duration,
   );
   elements.preview.currentTime = targetTime;
-  if (subjectReferences.length > 0) {
-    setTrackingStatus(
-      `Viewing ${subjectFrameLabel(
-        targetTime,
-      )}. Drag around the subject to correct it, then save the subject position.`,
-    );
+  if (
+    subjectReferences.length > 0 &&
+    subjectBoxAtTime(subjectReferences, targetTime)
+  ) {
+    renderViewingSubjectFrameStatus(targetTime);
+  } else {
+    setTrackingStatus("");
   }
   updateFrameStepControls();
 }
@@ -3207,9 +3321,9 @@ async function copyReencodeCommand() {
 async function detectStreamingKeyframes(revision) {
   updateVideoPreparationMessage(
     revision,
-    "Reading video details without loading the whole file…",
+    "Reading video details…",
   );
-  setStatus("Reading the large video in small pieces…", true, true);
+  setStatus("Reading video details…", true, true);
 
   const analysis = await analyzeStreamingMedia(selectedFile, {
     isCancelled: () =>
@@ -3218,7 +3332,7 @@ async function detectStreamingKeyframes(revision) {
       updateVideoPreparationMessage(
         revision,
         Number.isFinite(mediaDuration)
-          ? "Finding keyframes without loading the whole file…"
+          ? "Finding keyframes…"
           : "Reading keyframe details…",
       );
     },
@@ -3722,12 +3836,7 @@ async function cutVideo() {
   }
 }
 
-elements.fileInput.addEventListener("change", () => {
-  const [file] = elements.fileInput.files;
-  if (!file) {
-    return;
-  }
-
+function loadVideo(file) {
   sourceRevision += 1;
   dismissSubjectOnboarding();
   releaseLoadedVideo();
@@ -3777,6 +3886,35 @@ elements.fileInput.addEventListener("change", () => {
   elements.reencodeCopyStatus.textContent = "";
   setStatus("Preparing the video…", true, true);
   void detectKeyframes(sourceRevision);
+}
+
+function finishPendingVideoReplacement() {
+  const file = pendingReplacementFile;
+  const replace = elements.replaceVideoDialog.returnValue === "replace";
+  pendingReplacementFile = undefined;
+
+  if (replace && file) {
+    loadVideo(file);
+    return;
+  }
+
+  elements.fileInput.value = "";
+}
+
+elements.fileInput.addEventListener("change", () => {
+  const [file] = elements.fileInput.files;
+  if (!file) {
+    return;
+  }
+
+  if (subjectReferences.length > 0) {
+    pendingReplacementFile = file;
+    elements.replaceVideoDialog.returnValue = "";
+    elements.replaceVideoDialog.showModal();
+    return;
+  }
+
+  loadVideo(file);
 });
 
 elements.preview.addEventListener("loadeddata", () => {
@@ -4023,6 +4161,10 @@ elements.clearSubjectDialog.addEventListener(
   "close",
   finishClearSubjectSelection,
 );
+elements.replaceVideoDialog.addEventListener(
+  "close",
+  finishPendingVideoReplacement,
+);
 elements.laterSubjectDialog.addEventListener(
   "cancel",
   cancelPendingSubjectSave,
@@ -4149,7 +4291,15 @@ if (typeof ResizeObserver !== "undefined") {
   window.addEventListener("resize", renderTrackingConfidenceTimeline);
 }
 
-window.addEventListener("beforeunload", () => {
+window.addEventListener("beforeunload", (event) => {
+  if (subjectReferences.length === 0) {
+    return;
+  }
+  event.preventDefault();
+  event.returnValue = "";
+});
+
+window.addEventListener("pagehide", () => {
   stopTrackingRequested = true;
   stopCropPreviewAnimation();
   stopOutputPreviewFrame();

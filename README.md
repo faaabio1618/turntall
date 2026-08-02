@@ -26,14 +26,12 @@ search). Automatic is the default. Tracking records a clickable confidence
 timeline and stops when the result becomes unreliable so the user can correct
 the box and continue. It also detects hard scene changes, stops on the first
 frame of the new scene, and preselects **New position** for the correction box.
-The crop-window planner follows the original `pyTracker` behavior: it applies a
-horizontal Gaussian filter to tracked positions, ignores small movements, and
-then interpolates between meaningful camera positions. Automatic crop travel is
-also speed-limited, and later tracking or a manual correction can reshape
-earlier automatic crop positions so the camera begins moving gradually instead
-of catching up in a sudden jump. Manually drawn positions and scene jumps remain
-exact, and the movement threshold scales slightly for very high-resolution
-sources.
+The crop-window planner smooths nearby tracked frames, ignores small movements,
+and limits camera speed without letting the tracked subject leave the crop.
+While tracking, the changing crop is marked
+**Stabilizing**; it becomes fixed when tracking stops. A manual correction can
+still reshape automatic positions. Manually drawn positions and scene jumps
+remain exact.
 The first saved subject frame becomes the default cut start. Once a second frame
 is saved, the earliest and latest subject frames become the default cut range,
 even when the frames were selected out of chronological order.

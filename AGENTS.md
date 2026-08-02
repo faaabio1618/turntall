@@ -149,6 +149,8 @@ logic tests in the matching domain. Browser fixtures remain in
 - Remove temporary FFmpeg virtual-filesystem inputs and outputs when they are
   no longer needed.
 - Loading another video must release the previous video's browser resources.
+- Loading another video while subject frames are saved requires confirmation;
+  cancelling keeps the current video and its saved frames.
 - After browser-based manual tests, reload the page so test videos and output
   blobs are released from memory.
 - Do not print video contents, inspect personal media beyond what a test
@@ -175,6 +177,8 @@ Preserve these unless the user explicitly asks for different behavior:
 - Scene-change or lost-tracking correction shows red dotted boxes and asks the
   user to select the subject again.
 - Tracking can resume after a correction.
+- Restarting immediately after Stop resumes from the displayed stopped frame,
+  including with skipped-frame tracking speeds, without asking for a redraw.
 - If the user moves backward behind tracked frames, ask whether to redraw the
   subject or continue with the existing tracking.
 - Moving or redrawing a box compares horizontal distance with the immediately
@@ -183,6 +187,10 @@ Preserve these unless the user explicitly asks for different behavior:
   briefly animates that choice.
 - Saving a new position must preserve both the box and the correct source frame
   used by the preview.
+- The saved subject-box overlay is hidden on frames before the first saved
+  subject frame and after the last saved subject frame.
+- While tracking is active, the live crop preview remains visible beyond the
+  last saved frame without showing a saved subject box there.
 - Manual subject positions use Chrome's presented-frame `mediaTime`, not only
   the requested media playhead time. A `New position` must switch both the box
   and crop on that exact frame. FFmpeg must evaluate the crop before resetting
@@ -191,16 +199,18 @@ Preserve these unless the user explicitly asks for different behavior:
   references exist.
 - Clearing all subject positions requires confirmation. Cancelling the dialog
   must leave every reference intact.
-- Tracking speed `1x` is for fast-moving subjects; `6x` is for mostly steady
-  subjects. Videos above 50 fps automatically recommend `6x`.
-- Automatic crop motion follows the original Python tracker: horizontally
-  smooth tracked samples with a Gaussian sigma of 5, apply a 15-source-pixel
-  movement deadband (scaled slightly for high-resolution video), limit
-  automatic crop travel to roughly 35% of the source width per second, then
-  interpolate between committed positions. New tracking data or a new manual
-  anchor may revise earlier automatic crop positions so the motion can begin
-  gradually. Keep subject boxes untouched and preserve manual positions and
-  scene jumps exactly.
+- Tracking speed `1x` is for fast-moving subjects; `10x` is for very steady
+  subjects. Videos above 50 fps automatically recommend `4x`.
+- Automatic crop motion uses a time-based Gaussian over a 0.8-second window,
+  applies a 15-source-pixel movement deadband (scaled slightly for
+  high-resolution video), limits automatic crop travel to roughly 35% of the
+  source width per second, then interpolates between committed positions. The
+  tracked subject remaining inside the crop is a hard constraint: exceed the
+  camera speed limit only by the minimum amount needed to keep the subject
+  visible. Mark the live crop as `Stabilizing`; it becomes fixed when tracking
+  stops. Later tracking must not rewrite a finished section, but a manual
+  correction may recompute automatic positions. Keep subject boxes untouched
+  and preserve manual positions and scene jumps exactly.
 - Spacebar activates the current primary orange tracking/selection action.
 
 ### Audio and speed
@@ -242,16 +252,18 @@ For a logic-only change:
 For Svelte markup, CSS, media lifecycle, or editor-controller changes:
 
 1. Run `npm run check`.
-2. Run `npm run test:e2e` for the automated Chrome workflows.
-3. Load the app in Chrome at the Vite development URL for any behavior not
+2. Run focused automated or browser tests for the changed workflow when useful.
+3. Run the full `npm run test:e2e` suite before pushing, or when the user
+   explicitly requests it; it is not required after every local change.
+4. Load the app in Chrome at the Vite development URL for any behavior not
    covered by Playwright.
-4. Confirm the initial page has no console errors.
-5. Upload a small local video and wait for the preparation overlay to clear.
-6. Verify metadata, segment controls, preview controls, and the Cut button.
-7. Exercise the changed workflow using real pointer/keyboard interactions.
-8. For export changes, create a short two-second output and confirm the blob
+5. Confirm the initial page has no console errors.
+6. Upload a small local video and wait for the preparation overlay to clear.
+7. Verify metadata, segment controls, preview controls, and the Cut button.
+8. Exercise the changed workflow using real pointer/keyboard interactions.
+9. For export changes, create a short two-second output and confirm the blob
    link, filename, and completed processing steps.
-9. Reload the page after testing to release media resources.
+10. Reload the page after testing to release media resources.
 
 `tests/fixtures/e2e-sample.webm` is the small deterministic fixture committed
 for Playwright. Other optional local fixtures may exist in a developer checkout

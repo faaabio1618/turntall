@@ -39,7 +39,7 @@
             aria-hidden="true"
             hidden
           >
-            <span>Crop preview</span>
+            <span id="crop-preview-label">Crop</span>
           </div>
           <output
             id="preview-frame-indicator"
@@ -125,8 +125,8 @@
                 <button
                   type="button"
                   class="tooltip-trigger"
-                  aria-label="1 times for fast-moving subjects. 6 times for mostly steady subjects."
-                  data-tooltip="1× for fast-moving subjects · 6× for mostly steady subjects"
+                  aria-label="1 times for fast-moving subjects. 10 times for very steady subjects."
+                  data-tooltip="1× for fast-moving subjects · 10× for very steady subjects"
                 ></button>
               </span>
               <select
@@ -137,6 +137,7 @@
                 <option value="2">2×</option>
                 <option value="4">4×</option>
                 <option value="6">6×</option>
+                <option value="10">10×</option>
               </select>
             </div>
             <button
@@ -209,6 +210,12 @@
                 aria-valuemax="0"
                 aria-valuenow="0"
               ></canvas>
+              <span
+                id="tracking-stabilization-tail"
+                class="tracking-stabilization-tail"
+                aria-hidden="true"
+                hidden
+              ></span>
               <span
                 id="tracking-confidence-playhead"
                 class="tracking-confidence-playhead"

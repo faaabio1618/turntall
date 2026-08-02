@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  alignTimeToSubjectFrame,
   boxFromPoints,
   containedMediaRect,
   isDistantSubjectPosition,
@@ -85,6 +86,27 @@ describe("subject selection geometry", () => {
     expect(
       isValidSubjectBox({ x: 0.1, y: 0.1, width: 0.01, height: 0.7 }),
     ).toBe(false);
+  });
+});
+
+describe("subject frame timestamps", () => {
+  const references = [
+    { time: 4.994 },
+    { time: 5.04 },
+  ];
+
+  it("restores the saved timestamp represented by a rounded time", () => {
+    expect(alignTimeToSubjectFrame(references, 4.99, 30)).toBe(
+      4.994,
+    );
+    expect(alignTimeToSubjectFrame(references, 5.03, 30)).toBe(5.04);
+  });
+
+  it("leaves times without a saved frame unchanged", () => {
+    expect(alignTimeToSubjectFrame(references, 4.9, 30)).toBe(4.9);
+    expect(alignTimeToSubjectFrame(references, 4.99, undefined)).toBe(
+      4.99,
+    );
   });
 });
 
@@ -273,6 +295,27 @@ describe("restarting automatic tracking", () => {
       ),
     ).toBe(false);
   });
+
+  it("resumes directly from the frame where Stop completed", () => {
+    expect(
+      trackingRestartRequiresDecision(
+        references,
+        4,
+        30,
+        0.005,
+        4,
+      ),
+    ).toBe(false);
+    expect(
+      trackingRestartRequiresDecision(
+        references,
+        4,
+        30,
+        0.005,
+        4.1,
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("scene-change jump suggestion", () => {
@@ -343,13 +386,14 @@ describe("saved subject box display", () => {
     });
   });
 
-  it("keeps the first and last box outside the saved range", () => {
-    expect(subjectBoxAtTime(references, 0)).toEqual(
-      references[0].box,
-    );
-    expect(subjectBoxAtTime(references, 10)).toEqual(
-      references[1].box,
-    );
+  it("hides the box before the first saved frame", () => {
+    expect(subjectBoxAtTime(references, 0)).toBeUndefined();
+    expect(subjectBoxAtTime(references, 2)).toEqual(references[0].box);
+  });
+
+  it("hides the box after the last saved frame", () => {
+    expect(subjectBoxAtTime(references, 10)).toBeUndefined();
+    expect(subjectBoxAtTime(references, 6)).toEqual(references[1].box);
     expect(subjectBoxAtTime([], 3)).toBeUndefined();
   });
 

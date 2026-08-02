@@ -11,7 +11,8 @@
           <li>Create vertical videos</li>
           <li>Keep moving subjects in frame</li>
           <li>Without sharing the video</li>
-          <li>Free export · no watermark</li>
+          <li>Free export</li>
+          <li>No watermark</li>
         </ul>
       </header>
 

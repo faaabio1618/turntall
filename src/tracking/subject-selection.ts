@@ -144,6 +144,30 @@ export function subjectTimeBounds(references) {
   };
 }
 
+export function alignTimeToSubjectFrame(
+  references,
+  time,
+  frameRate,
+) {
+  const frame = frameIndexAtTime(time, frameRate);
+  if (frame === undefined) {
+    return time;
+  }
+
+  const matchingReference = (references ?? [])
+    .filter(
+      (reference) =>
+        Number.isFinite(reference.time) &&
+        frameIndexAtTime(reference.time, frameRate) === frame,
+    )
+    .sort(
+      (left, right) =>
+        Math.abs(left.time - time) - Math.abs(right.time - time),
+    )[0];
+
+  return matchingReference?.time ?? time;
+}
+
 export function subjectBoxAtTime(references, time, jumpTolerance = 0) {
   const points = (references ?? [])
     .filter(
@@ -153,6 +177,12 @@ export function subjectBoxAtTime(references, time, jumpTolerance = 0) {
     .sort((left, right) => left.time - right.time);
 
   if (points.length === 0) {
+    return undefined;
+  }
+  if (time < points[0].time - jumpTolerance) {
+    return undefined;
+  }
+  if (time > points.at(-1).time + jumpTolerance) {
     return undefined;
   }
   if (points.length === 1 || time <= points[0].time) {
@@ -291,8 +321,20 @@ export function trackingRestartRequiresDecision(
   currentTime,
   frameRate,
   tolerance = 0.005,
+  stoppedFrameTime = undefined,
 ) {
   const currentFrame = frameIndexAtTime(currentTime, frameRate);
+  const stoppedFrame = frameIndexAtTime(stoppedFrameTime, frameRate);
+  const isStoppedFrame =
+    currentFrame !== undefined && stoppedFrame !== undefined
+      ? currentFrame === stoppedFrame
+      : Number.isFinite(currentTime) &&
+        Number.isFinite(stoppedFrameTime) &&
+        Math.abs(currentTime - stoppedFrameTime) <= tolerance;
+  if (isStoppedFrame) {
+    return false;
+  }
+
   return (
     Number.isFinite(currentTime) &&
     (references ?? []).some(

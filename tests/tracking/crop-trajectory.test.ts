@@ -174,6 +174,23 @@ describe("crop trajectories", () => {
     );
   });
 
+  it("does not smooth across samples outside the time window", () => {
+    const points = [
+      { time: 0, left: 0, top: 0 },
+      { time: 0.1, left: 0, top: 0, automatic: true },
+      { time: 2, left: 800, top: 0 },
+    ];
+
+    const smoothed = smoothAutomaticCropPositions(
+      points,
+      5,
+      0,
+      Number.POSITIVE_INFINITY,
+      0.8,
+    );
+    expect(smoothed).toEqual([points[0], points[2]]);
+  });
+
   it("stabilizes the crop without moving the tracked subject boxes", () => {
     const samples = [
       {
@@ -208,7 +225,7 @@ describe("crop trajectories", () => {
     });
   });
 
-  it("applies the speed limit while keeping automatic subject boxes intact", () => {
+  it("keeps a fast subject visible even when it exceeds the crop speed limit", () => {
     const samples = [
       {
         time: 0,
@@ -232,8 +249,69 @@ describe("crop trajectories", () => {
     expect(stabilized[1]).toMatchObject({
       time: 0.1,
       box: samples[1].box,
-      cropLeft: 20,
+      cropLeft: 812,
       stabilized: true,
+    });
+  });
+
+  it("moves through the deadband when the subject reaches the crop edge", () => {
+    const samples = [
+      {
+        time: 0,
+        box: { x: 0.05, y: 0.2, width: 0.1, height: 0.4 },
+        automatic: false,
+      },
+      {
+        time: 0.1,
+        box: {
+          x: 0.2234375,
+          y: 0.2,
+          width: 0.1,
+          height: 0.4,
+        },
+        automatic: true,
+      },
+    ];
+
+    const stabilized = stabilizeTrackedReferences(samples, {
+      ...dimensions,
+      sigma: 0,
+      movementThreshold: 15,
+      maximumSpeed: 100,
+    });
+
+    expect(stabilized[1]).toMatchObject({
+      time: 0.1,
+      automatic: true,
+    });
+    expect(stabilized[1].cropLeft).toBeCloseTo(10, 8);
+  });
+
+  it("keeps automatic crops outside the stabilization window fixed", () => {
+    const locked = {
+      time: 0.2,
+      box: { x: 0.1, y: 0.2, width: 0.1, height: 0.4 },
+      cropLeft: 120,
+      automatic: true,
+    };
+    const stabilized = stabilizeTrackedReferences(
+      [
+        { ...leftReference, time: 0 },
+        locked,
+        { ...rightReference, time: 2 },
+      ],
+      {
+        ...dimensions,
+        sigma: 0,
+        movementThreshold: 0,
+        maximumSpeed: 200,
+        fixedBeforeTime: 1,
+      },
+    );
+
+    expect(stabilized.find((point) => point.time === 0.2)).toMatchObject({
+      cropLeft: 120,
+      automatic: true,
     });
   });
 

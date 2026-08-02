@@ -435,6 +435,19 @@ video {
   line-height: 1;
 }
 
+.crop-preview.provisional {
+  border-style: dashed;
+  border-color: #fbbf24;
+  box-shadow:
+    0 0 0 1px rgb(120 53 15 / 85%),
+    0 0 0 9999px rgb(3 7 18 / 58%);
+}
+
+.crop-preview.provisional span {
+  color: #fffbeb;
+  background: rgb(120 53 15 / 88%);
+}
+
 .preview-frame-indicator {
   position: absolute;
   z-index: 3;
@@ -1039,7 +1052,7 @@ video {
 
 .tracking-confidence-playhead {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   top: 0;
   bottom: 0;
   width: 2px;
@@ -1047,6 +1060,21 @@ video {
   box-shadow: 0 0 0 1px rgb(17 24 39 / 65%);
   pointer-events: none;
   transform: translateX(-1px);
+}
+
+.tracking-stabilization-tail {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border-left: 1px dashed rgb(120 53 15 / 75%);
+  background: repeating-linear-gradient(
+    135deg,
+    rgb(251 191 36 / 24%) 0 5px,
+    rgb(255 255 255 / 10%) 5px 10px
+  );
+  pointer-events: none;
 }
 
 .tracking-confidence-scale {
