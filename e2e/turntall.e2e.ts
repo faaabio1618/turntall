@@ -498,6 +498,69 @@ test("does not ask to delete boxes when redrawing the final tracked frame", asyn
   expect(runtimeErrors).toEqual([]);
 });
 
+test("requires a fresh box whenever tracking asks for a correction", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+
+  await page.locator("#tracking-frame-skip").selectOption("6");
+  await page.getByRole("button", { name: /Track subject/ }).click();
+  await expect(page.locator("#stop-following")).toBeHidden({
+    timeout: 30_000,
+  });
+
+  const preview = page.locator("#preview");
+  await preview.focus();
+  for (let frame = 0; frame < 6; frame += 1) {
+    await page.keyboard.press("ArrowLeft");
+  }
+  await expect.poll(() => preview.evaluate((video) => video.seeking)).toBe(
+    false,
+  );
+
+  await page.getByRole("button", { name: /Track subject/ }).click();
+  const restartDialog = page.locator("#restart-tracking-dialog");
+  await expect(restartDialog).toBeVisible();
+  await restartDialog.getByRole("button", { name: "Yes" }).click();
+  await expect(page.locator("#subject-overlay")).toHaveClass(/active/);
+  await expect(page.locator("#subject-box")).toBeHidden();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("#subject-overlay")).not.toHaveClass(
+    /active/,
+  );
+  const redraw = page.getByRole("button", {
+    name: "Draw a new box (Spacebar)",
+  });
+  await redraw.click();
+
+  await expect(page.locator("#subject-box")).toBeHidden();
+  await expect(page.locator("#confirm-subject")).toBeDisabled();
+  await drawSubjectBox(page, {
+    left: 0.3,
+    top: 0.25,
+    right: 0.7,
+    bottom: 0.65,
+  });
+  await page.locator("#confirm-subject").click();
+  const laterBoxesDialog = page.locator("#later-subject-dialog");
+  await expect(laterBoxesDialog).toBeVisible();
+  await laterBoxesDialog
+    .getByRole("button", { name: "Delete later boxes" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Track subject/ }),
+  ).toBeVisible();
+  expect(runtimeErrors).toEqual([]);
+});
+
 test("steps one frame when an arrow is pressed immediately after Stop", async ({
   page,
 }) => {

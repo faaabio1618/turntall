@@ -1329,12 +1329,15 @@ function beginSubjectSelection(
   const currentTime = Number.isFinite(presentedTime)
     ? presentedTime
     : 0;
-  const requestedReference = forceNew
+  const startsFresh =
+    forceNew ||
+    (trackingRequiresCorrection && referenceId === undefined);
+  const requestedReference = startsFresh
     ? undefined
     : subjectReferences.find((item) => item.id === referenceId);
   const reference =
     requestedReference ??
-    (forceNew
+    (startsFresh
       ? undefined
       : subjectReferenceAtTime(subjectReferences, currentTime, {
           duration,
@@ -1342,7 +1345,7 @@ function beginSubjectSelection(
         }));
 
   editingSubjectId = reference?.id;
-  subjectSelectionTime = reference?.time ?? currentTime;
+  subjectSelectionTime = requestedReference?.time ?? currentTime;
   previousSubjectBoxBeforeDraw = trackingLiveBox
     ? { ...trackingLiveBox }
     : subjectBoxAtTime(subjectReferences, subjectSelectionTime);
