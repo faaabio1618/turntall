@@ -30,6 +30,7 @@
     "mediabunny": "1.44.2"
   },
   "devDependencies": {
+    "@emnapi/runtime": "1.11.3",
     "@playwright/test": "^1.62.1",
     "@sveltejs/vite-plugin-svelte": "^7.2.0",
     "@types/node": "^26.1.2",
