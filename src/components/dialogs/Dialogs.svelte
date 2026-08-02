@@ -68,14 +68,16 @@
     >
       <form method="dialog" class="confirmation-dialog">
         <h2 id="restart-tracking-dialog-title">
-          Redraw the subject to fix the tracking?
+          Restart tracking from this frame?
         </h2>
-        <p>You moved behind the latest tracked frame.</p>
+        <p id="restart-tracking-dialog-copy">
+          Tracking already reaches a later frame.
+        </p>
         <div class="confirmation-dialog-actions">
           <button value="continue" type="submit" class="secondary">
-            No
+            Continue existing tracking
           </button>
-          <button value="redraw" type="submit">Yes</button>
+          <button value="redraw" type="submit">Redraw this frame</button>
         </div>
       </form>
     </dialog>

@@ -77,6 +77,8 @@ import {
   centeredVerticalSize,
   clamp,
   defaultOutputFilename,
+  frameIndexAtTime,
+  frameNumberAtTime,
   frameStepTime,
   formatBytes,
   formatTime,
@@ -84,6 +86,7 @@ import {
   parseFramecrcKeyframes,
   presentedFrameTime,
   sameDisplayedTime,
+  sameVideoFrame,
   spaceShortcutAction,
   suggestedTrackingFrameSkip,
 } from "../media/video-utils.ts";
@@ -428,11 +431,21 @@ function updateSubjectSurfaceRect() {
 }
 
 function previewFrameNumber(time = sourcePreviewTime()) {
+  return frameNumberAtTime(time, mediaInfo?.frameRate);
+}
+
+function subjectFrameLabel(time) {
+  const frameNumber = previewFrameNumber(time);
+  return frameNumber === undefined
+    ? formatTime(time)
+    : `frame ${frameNumber}`;
+}
+
+function sameSubjectFrame(first, second) {
   const frameRate = mediaInfo?.frameRate;
-  if (!Number.isFinite(time) || !Number.isFinite(frameRate) || frameRate <= 0) {
-    return undefined;
-  }
-  return Math.max(1, Math.floor(time * frameRate) + 1);
+  return Number.isFinite(frameRate) && frameRate > 0
+    ? sameVideoFrame(first, second, frameRate)
+    : sameDisplayedTime(first, second);
 }
 
 function renderPreviewFrameIndicator() {
@@ -483,16 +496,23 @@ function renderCropPreview() {
   );
   const cropSize = centeredVerticalSize(sourceWidth, sourceHeight);
   const previewReferences = trackingLiveBox
-    ? [
-        ...subjectReferences,
+    ? stabilizeTrackedReferences(
+        [
+          ...subjectReferences,
+          {
+            id: "tracking-live",
+            time: previewTime,
+            box: trackingLiveBox,
+            jump: false,
+            automatic: true,
+          },
+        ].sort((left, right) => left.time - right.time),
         {
-          id: "tracking-live",
-          time: previewTime,
-          box: trackingLiveBox,
-          jump: false,
-          automatic: true,
+          sourceWidth,
+          sourceHeight,
+          cropSize,
         },
-      ].sort((left, right) => left.time - right.time)
+      )
     : subjectReferences;
   const trajectory = createCropTrajectory(previewReferences, {
     start: 0,
@@ -1199,7 +1219,7 @@ function reviewTrackingConfidencePoint(point) {
     String(point.time),
   );
   setTrackingStatus(
-    `Reviewing ${formatTime(point.time)} at ${Math.round(
+    `Reviewing ${subjectFrameLabel(point.time)} at ${Math.round(
       point.confidence * 100,
     )}% confidence. Drag around the subject to correct this frame.`,
     point.confidence <= TRACKING_CONFIDENCE_THRESHOLD,
@@ -1228,16 +1248,16 @@ function renderSubjectReferences() {
     if (reference.automatic) {
       setIconOnlyControl(button, "arrowRight");
     } else {
-      button.textContent = `${reference.jump ? "New · " : ""}${formatTime(
+      button.textContent = `${reference.jump ? "New · " : ""}${subjectFrameLabel(
         reference.time,
       )}`;
     }
     if (reference.automatic) {
-      button.title = `Tracked to ${formatTime(reference.time)}`;
+      button.title = `Tracked to ${subjectFrameLabel(reference.time)}`;
     }
     button.setAttribute(
       "aria-label",
-      `Edit subject frame at ${formatTime(reference.time)}${
+      `Edit subject at ${subjectFrameLabel(reference.time)}${
         reference.jump
           ? ", new position"
           : reference.automatic
@@ -1374,7 +1394,7 @@ function beginSubjectSelection(
 
   if (
     reference &&
-    !sameDisplayedTime(sourcePreviewTime(), reference.time)
+    !sameSubjectFrame(sourcePreviewTime(), reference.time)
   ) {
     elements.preview.currentTime = reference.time;
   }
@@ -1411,14 +1431,30 @@ function saveSubjectReference(
         : "the subject frame edit",
   );
   if (deleteFollowing) {
+    const savedFrame = frameIndexAtTime(
+      reference.time,
+      mediaInfo?.frameRate,
+    );
     trackingConfidencePoints = trackingConfidencePoints.filter(
-      (point) => point.time <= reference.time + 0.005,
+      (point) => {
+        const pointFrame = frameIndexAtTime(
+          point.time,
+          mediaInfo?.frameRate,
+        );
+        return savedFrame !== undefined && pointFrame !== undefined
+          ? pointFrame <= savedFrame
+          : point.time <= reference.time + 0.005;
+      },
     );
   }
-  subjectReferences = replaceSubjectReference(
-    subjectReferences,
-    reference,
-    deleteFollowing,
+  subjectReferences = stabilizeSubjectPath(
+    replaceSubjectReference(
+      subjectReferences,
+      reference,
+      deleteFollowing,
+      0.005,
+      mediaInfo?.frameRate,
+    ),
   );
   if (
     isSceneJumpSuggestion(
@@ -1451,7 +1487,7 @@ function confirmSubjectSelection() {
   const matchingReference = subjectReferences.find(
     (reference) =>
       reference.id === editingSubjectId ||
-      sameDisplayedTime(reference.time, subjectSelectionTime),
+      sameSubjectFrame(reference.time, subjectSelectionTime),
   );
   const isNewReference = !matchingReference;
   const referenceId = matchingReference?.id ?? nextSubjectId++;
@@ -1475,7 +1511,7 @@ function confirmSubjectSelection() {
     pendingSubjectSave = { reference, isNewReference };
     elements.laterSubjectDialogCopy.textContent = `There ${
       laterReferences.length === 1 ? "is 1 box" : `are ${laterReferences.length} boxes`
-    } after this frame. Changing this position may make ${
+    } after ${subjectFrameLabel(subjectSelectionTime)}. Changing this position may make ${
       laterReferences.length === 1
         ? "that later box"
         : "those later boxes"
@@ -1570,12 +1606,20 @@ function captureTrackingFrame() {
 }
 
 function seekPreviewForTracking(time) {
-  const target = clamp(time, 0, duration);
+  const frameRate = mediaInfo?.frameRate;
+  const frameIndex = frameIndexAtTime(time, frameRate);
+  const target = clamp(
+    frameIndex === undefined
+      ? time
+      : (frameIndex + 0.25) / frameRate,
+    0,
+    duration,
+  );
   if (
     elements.preview.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA &&
     Math.abs(elements.preview.currentTime - target) < 0.004
   ) {
-    return Promise.resolve();
+    return Promise.resolve(sourcePreviewTime());
   }
 
   return new Promise((resolve, reject) => {
@@ -1589,8 +1633,10 @@ function seekPreviewForTracking(time) {
       elements.preview.removeEventListener("error", handleError);
     };
     const handleSeeked = () => {
-      cleanup();
-      requestAnimationFrame(resolve);
+      requestAnimationFrame(() => {
+        cleanup();
+        resolve(sourcePreviewTime());
+      });
     };
     const handleError = () => {
       cleanup();
@@ -1618,28 +1664,41 @@ function yieldTrackingFrame(frameStartedAt, frameInterval) {
   );
 }
 
-function saveTrackedReferences(samples) {
-  const stabilized = stabilizeTrackedReferences(samples, {
-    sourceWidth,
-    sourceHeight,
-    cropSize: centeredVerticalSize(sourceWidth, sourceHeight),
-  });
-  let nextReferences = [...subjectReferences];
+function stabilizeSubjectPath(references) {
+  return stabilizeTrackedReferences(
+    [...references].sort((left, right) => left.time - right.time),
+    {
+      sourceWidth,
+      sourceHeight,
+      cropSize: centeredVerticalSize(sourceWidth, sourceHeight),
+    },
+  ).map((reference) => ({
+    ...reference,
+    id: reference.id ?? nextSubjectId++,
+    box: { ...reference.box },
+  }));
+}
 
-  for (const sample of stabilized.slice(1)) {
-    const matchingReference = nextReferences.find(
+function saveTrackedReferences(samples) {
+  let combinedReferences = [...subjectReferences];
+
+  for (const sample of samples.slice(1)) {
+    const matchingIndex = combinedReferences.findIndex(
       (reference) =>
         reference.automatic &&
-        Math.abs(reference.time - sample.time) < 0.01,
+        sameSubjectFrame(reference.time, sample.time),
     );
-    const referenceId = matchingReference?.id ?? nextSubjectId++;
-    nextReferences = [
-      ...nextReferences.filter(
-        (reference) => reference.id !== referenceId,
-      ),
+    const matchingReference =
+      matchingIndex >= 0
+        ? combinedReferences[matchingIndex]
+        : undefined;
+    combinedReferences = [
+      ...(matchingIndex >= 0
+        ? combinedReferences.filter((_, index) => index !== matchingIndex)
+        : combinedReferences),
       {
         ...sample,
-        id: referenceId,
+        ...(matchingReference ? { id: matchingReference.id } : {}),
         box: { ...sample.box },
         jump: false,
         automatic: true,
@@ -1647,15 +1706,17 @@ function saveTrackedReferences(samples) {
     ];
   }
 
-  subjectReferences = nextReferences.sort(
-    (left, right) => left.time - right.time,
-  );
+  subjectReferences = stabilizeSubjectPath(combinedReferences);
   applySubjectTimeBounds();
   updateSubjectSummary();
 }
 
-function requestTrackingRestartDecision() {
+function requestTrackingRestartDecision(currentTime, latestTrackedTime) {
   return new Promise((resolve) => {
+    elements.restartTrackingDialogTitle.textContent =
+      `Restart tracking from ${subjectFrameLabel(currentTime)}?`;
+    elements.restartTrackingDialogCopy.textContent =
+      `Tracking already reaches ${subjectFrameLabel(latestTrackedTime)}. Redraw the subject here before replacing the later tracking.`;
     elements.restartTrackingDialog.returnValue = "";
     elements.restartTrackingDialog.addEventListener(
       "close",
@@ -1685,13 +1746,21 @@ async function followSubjectForward() {
     return;
   }
 
+  const currentTrackingTime = sourcePreviewTime();
+  const latestAutomaticReference = subjectReferences
+    .filter((reference) => reference.automatic)
+    .at(-1);
   if (
     trackingRestartRequiresDecision(
       subjectReferences,
-      sourcePreviewTime(),
+      currentTrackingTime,
+      mediaInfo?.frameRate,
     )
   ) {
-    const decision = await requestTrackingRestartDecision();
+    const decision = await requestTrackingRestartDecision(
+      currentTrackingTime,
+      latestAutomaticReference?.time,
+    );
     if (decision === "redraw") {
       trackingRequiresCorrection = true;
       setTrackingStatus("");
@@ -1792,8 +1861,13 @@ async function followSubjectForward() {
         break;
       }
 
-      const frameTime = Math.min(time, duration);
-      await seekPreviewForTracking(frameTime);
+      const requestedFrameTime = Math.min(time, duration);
+      const presentedTrackingTime = await seekPreviewForTracking(
+        requestedFrameTime,
+      );
+      const frameTime = Number.isFinite(presentedTrackingTime)
+        ? presentedTrackingTime
+        : requestedFrameTime;
       if (stopTrackingRequested) {
         break;
       }
@@ -1827,7 +1901,7 @@ async function followSubjectForward() {
       if (result.confidence < TRACKING_CONFIDENCE_THRESHOLD) {
         lowConfidenceFrames += 1;
         setTrackingStatus(
-          `Checking the subject at ${formatTime(frameTime)}…`,
+          `Checking the subject at ${subjectFrameLabel(frameTime)}…`,
         );
         if (
           lowConfidenceFrames >= lowConfidenceFrameLimit
@@ -1917,7 +1991,7 @@ async function followSubjectForward() {
 
     if (stopReason === "scene") {
       setTrackingStatus(
-        `A scene change was detected at ${formatTime(
+        `A scene change was detected at ${subjectFrameLabel(
           failedTrackingTime,
         )}. Draw around the subject in this frame; “New position” will be selected automatically.`,
         true,
@@ -1925,7 +1999,7 @@ async function followSubjectForward() {
     } else if (stopReason === "confidence") {
       updateTrackingControls();
       setTrackingStatus(
-        `Tracking lost at ${formatTime(
+        `Tracking lost at ${subjectFrameLabel(
           failedTrackingTime,
         )}. Draw around the subject in this frame, then save it before tracking again.`,
         true,
@@ -1963,9 +2037,7 @@ function stopFollowingSubject() {
   trackingRequestedStopTime = trackingLastGoodTime;
   elements.stopFollowing.disabled = true;
   setTrackingStatus(
-    `Stopping at the last fully tracked frame, ${formatTime(
-      trackingRequestedStopTime,
-    )}…`,
+    `Stopping at ${subjectFrameLabel(trackingRequestedStopTime)}…`,
   );
 }
 
@@ -2431,7 +2503,7 @@ function updateFrameStepControls() {
 
   if (isSelectingSubject) {
     elements.frameStepHelp.textContent =
-      `Selecting at ${formatTime(
+      `Selecting ${subjectFrameLabel(
         subjectSelectionTime,
       )}. Draw the box · Spacebar activates the orange button · Ctrl+Z cancels.`;
     return;
@@ -2478,7 +2550,7 @@ function stepPreviewFrame(direction) {
   elements.preview.currentTime = targetTime;
   if (subjectReferences.length > 0) {
     setTrackingStatus(
-      `Viewing frame ${formatTime(
+      `Viewing ${subjectFrameLabel(
         targetTime,
       )}. Drag around the subject to correct it, then save the subject position.`,
     );
@@ -2494,14 +2566,24 @@ function handlePreviewKeyboardShortcut(event) {
     (event.code === "Space" ||
       event.key === " " ||
       event.key === "Spacebar");
+  const targetElement =
+    event.target instanceof Element ? event.target : undefined;
+  const targetInput = targetElement?.closest("input");
+  const targetAcceptsText = Boolean(
+    targetElement?.closest("textarea, [contenteditable]") ||
+      (targetInput instanceof HTMLInputElement &&
+        ["text", "search", "email", "url", "tel", "password"].includes(
+          targetInput.type,
+        )),
+  );
   const targetIsEditable =
-    event.target instanceof Element &&
+    targetElement &&
     Boolean(
-      event.target.closest(
+      targetElement.closest(
         "input, textarea, [contenteditable]",
       ),
     );
-  if (isPlainSpace && !targetIsEditable && !event.defaultPrevented) {
+  if (isPlainSpace && !targetAcceptsText && !event.defaultPrevented) {
     const action = spaceShortcutAction({
       isTracking: isTrackingSubject,
       isSelecting: isSelectingSubject,

@@ -35,6 +35,9 @@ test("serves the production editor and local FFmpeg assets", async ({
     Promise.all(
       [
         ["favicon.svg", "/favicon.svg"],
+        ["robots.txt", "/robots.txt"],
+        ["sitemap.xml", "/sitemap.xml"],
+        ["llms.txt", "/llms.txt"],
         ["ffmpeg-core.js", "/ffmpeg/ffmpeg-core.js"],
         ["ffmpeg-core.wasm", "/ffmpeg/ffmpeg-core.wasm"],
       ].map(async ([name, url]) => {
@@ -54,6 +57,21 @@ test("serves the production editor and local FFmpeg assets", async ({
       contentType: expect.stringContaining("image/svg+xml"),
     },
     {
+      name: "robots.txt",
+      ok: true,
+      contentType: expect.stringContaining("text/plain"),
+    },
+    {
+      name: "sitemap.xml",
+      ok: true,
+      contentType: expect.stringContaining("text/xml"),
+    },
+    {
+      name: "llms.txt",
+      ok: true,
+      contentType: expect.stringContaining("text/plain"),
+    },
+    {
       name: "ffmpeg-core.js",
       ok: true,
       contentType: expect.stringContaining("text/javascript"),
@@ -64,5 +82,22 @@ test("serves the production editor and local FFmpeg assets", async ({
       contentType: expect.stringContaining("application/wasm"),
     },
   ]);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    "href",
+    "https://turntall.com/",
+  );
+  const structuredData = await page
+    .locator('script[type="application/ld+json"]')
+    .evaluate((element) => JSON.parse(element.textContent ?? "{}"));
+  expect(structuredData).toMatchObject({
+    "@type": "WebApplication",
+    isAccessibleForFree: true,
+    offers: { price: "0" },
+  });
+  await expect(
+    page.getByRole("heading", {
+      name: "Convert horizontal video to vertical video in your browser",
+    }),
+  ).toBeVisible();
   expect(runtimeErrors).toEqual([]);
 });

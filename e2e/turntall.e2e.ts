@@ -370,6 +370,31 @@ test("draws, saves, and clears a subject position safely", async ({
   expect(runtimeErrors).toEqual([]);
 });
 
+test("Spacebar saves, starts, and stops the primary subject action", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+  await drawSubjectBox(page);
+
+  await page.keyboard.press("Space");
+  await expect(page.locator(".subject-reference")).toHaveCount(1);
+  await expect(page.locator("#subject-overlay")).not.toHaveClass(/active/);
+
+  await page.locator("#video-speed").focus();
+  await expect
+    .poll(() => page.evaluate(() => document.activeElement?.id))
+    .toBe("video-speed");
+  await page.keyboard.press("Space");
+  const stop = page.locator("#stop-following");
+  await expect(stop).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(stop).toBeHidden({ timeout: 30_000 });
+  expect(runtimeErrors).toEqual([]);
+});
+
 test("an arrow always leaves subject selection and steps one frame", async ({
   page,
 }) => {
@@ -413,6 +438,38 @@ test("tracks the selected subject through decoded frames", async ({ page }) => {
   });
   await expect(page.locator(".subject-reference")).not.toHaveCount(0);
   await expect(page.locator("#preview")).toHaveJSProperty("paused", true);
+  const displayedFrame =
+    (await page.locator("#preview-frame-indicator").textContent()) ?? "";
+  const finalReferenceLabel = await page
+    .locator(".subject-reference.automatic")
+    .getAttribute("aria-label");
+  expect(displayedFrame).not.toBe("");
+  expect(finalReferenceLabel).toContain(displayedFrame.toLowerCase());
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("resumes from the frame reached by Stop without asking for a redraw", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const runtimeErrors = captureRuntimeErrors(page);
+  await openSupportedApp(page);
+  await loadFixture(page);
+  await drawSubjectBox(page);
+  await page
+    .getByRole("button", { name: "Create vertical video", exact: true })
+    .click();
+
+  await page.locator("#tracking-frame-skip").selectOption("6");
+  await page.getByRole("button", { name: /Track subject/ }).click();
+  const stop = page.locator("#stop-following");
+  await expect(stop).toBeVisible();
+  await stop.click();
+  await expect(stop).toBeHidden({ timeout: 30_000 });
+
+  await page.getByRole("button", { name: /Track subject/ }).click();
+  await expect(page.locator("#restart-tracking-dialog")).toBeHidden();
+  await expect(stop).toBeHidden({ timeout: 30_000 });
   expect(runtimeErrors).toEqual([]);
 });
 
@@ -528,7 +585,9 @@ test("requires a fresh box whenever tracking asks for a correction", async ({
   await page.getByRole("button", { name: /Track subject/ }).click();
   const restartDialog = page.locator("#restart-tracking-dialog");
   await expect(restartDialog).toBeVisible();
-  await restartDialog.getByRole("button", { name: "Yes" }).click();
+  await restartDialog
+    .getByRole("button", { name: "Redraw this frame" })
+    .click();
   await expect(page.locator("#subject-overlay")).toHaveClass(/active/);
   await expect(page.locator("#subject-box")).toBeHidden();
 

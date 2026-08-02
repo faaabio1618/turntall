@@ -45,6 +45,31 @@ export function sameDisplayedTime(first, second) {
   );
 }
 
+export function frameIndexAtTime(time, frameRate) {
+  const numericTime = Number(time);
+  const numericFrameRate = Number(frameRate);
+  if (
+    !Number.isFinite(numericTime) ||
+    !Number.isFinite(numericFrameRate) ||
+    numericFrameRate <= 0
+  ) {
+    return undefined;
+  }
+
+  return Math.max(0, Math.round(numericTime * numericFrameRate));
+}
+
+export function frameNumberAtTime(time, frameRate) {
+  const frameIndex = frameIndexAtTime(time, frameRate);
+  return frameIndex === undefined ? undefined : frameIndex + 1;
+}
+
+export function sameVideoFrame(first, second, frameRate) {
+  const firstFrame = frameIndexAtTime(first, frameRate);
+  const secondFrame = frameIndexAtTime(second, frameRate);
+  return firstFrame !== undefined && firstFrame === secondFrame;
+}
+
 export function presentedFrameTime(
   currentTime,
   mediaTime,

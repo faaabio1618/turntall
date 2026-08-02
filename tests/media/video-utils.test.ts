@@ -3,6 +3,8 @@ import {
   centeredVerticalSize,
   clamp,
   defaultOutputFilename,
+  frameIndexAtTime,
+  frameNumberAtTime,
   frameStepTime,
   formatBytes,
   formatTime,
@@ -13,6 +15,7 @@ import {
   parseFramecrcKeyframes,
   presentedFrameTime,
   sameDisplayedTime,
+  sameVideoFrame,
   spaceShortcutAction,
   suggestedTrackingFrameSkip,
 } from "../../src/media/video-utils.ts";
@@ -52,6 +55,14 @@ describe("time and size formatting", () => {
     expect(sameDisplayedTime(12.344, "12.34")).toBe(true);
     expect(sameDisplayedTime(12.346, "12.34")).toBe(false);
     expect(sameDisplayedTime(Number.NaN, "12.34")).toBe(false);
+  });
+
+  it("identifies decoded frames without relying on timestamp tolerances", () => {
+    expect(frameIndexAtTime(5, 30)).toBe(150);
+    expect(frameNumberAtTime(5, 30)).toBe(151);
+    expect(sameVideoFrame(5, 4.994, 30)).toBe(true);
+    expect(sameVideoFrame(5, 4.96, 30)).toBe(false);
+    expect(frameNumberAtTime(5, undefined)).toBeUndefined();
   });
 
   it("uses the decoded timestamp for the frame actually being shown", () => {

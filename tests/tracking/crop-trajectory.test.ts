@@ -133,6 +133,47 @@ describe("crop trajectories", () => {
     ]);
   });
 
+  it("limits automatic crop travel using elapsed video time", () => {
+    const points = [
+      { time: 0, left: 0, top: 0 },
+      { time: 0.1, left: 400, top: 0, automatic: true },
+      { time: 0.2, left: 800, top: 0, automatic: true },
+    ];
+
+    expect(smoothAutomaticCropPositions(points, 0, 0, 200)).toEqual([
+      points[0],
+      { ...points[1], left: 20 },
+      { ...points[2], left: 40 },
+    ]);
+  });
+
+  it("moves earlier automatic crops toward a future manual anchor", () => {
+    const points = [
+      { time: 0, left: 0, top: 0 },
+      { time: 1, left: 0, top: 0, automatic: true },
+      { time: 2, left: 400, top: 0, automatic: true },
+      { time: 3, left: 600, top: 0 },
+    ];
+
+    expect(smoothAutomaticCropPositions(points, 0, 0, 200)).toEqual([
+      points[0],
+      { ...points[1], left: 200 },
+      points[2],
+      points[3],
+    ]);
+  });
+
+  it("never changes manually drawn anchors to satisfy the speed limit", () => {
+    const points = [
+      { time: 0, left: 0, top: 0 },
+      { time: 0.1, left: 800, top: 0 },
+    ];
+
+    expect(smoothAutomaticCropPositions(points, 0, 0, 200)).toEqual(
+      points,
+    );
+  });
+
   it("stabilizes the crop without moving the tracked subject boxes", () => {
     const samples = [
       {
@@ -163,6 +204,35 @@ describe("crop trajectories", () => {
       time: 2,
       box: samples[2].box,
       cropLeft: 374,
+      stabilized: true,
+    });
+  });
+
+  it("applies the speed limit while keeping automatic subject boxes intact", () => {
+    const samples = [
+      {
+        time: 0,
+        box: { x: 0.05, y: 0.2, width: 0.1, height: 0.4 },
+        automatic: false,
+      },
+      {
+        time: 0.1,
+        box: { x: 0.85, y: 0.2, width: 0.1, height: 0.4 },
+        automatic: true,
+      },
+    ];
+
+    const stabilized = stabilizeTrackedReferences(samples, {
+      ...dimensions,
+      sigma: 0,
+      movementThreshold: 0,
+      maximumSpeed: 200,
+    });
+
+    expect(stabilized[1]).toMatchObject({
+      time: 0.1,
+      box: samples[1].box,
+      cropLeft: 20,
       stabilized: true,
     });
   });

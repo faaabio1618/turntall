@@ -28,9 +28,12 @@ the box and continue. It also detects hard scene changes, stops on the first
 frame of the new scene, and preselects **New position** for the correction box.
 The crop-window planner follows the original `pyTracker` behavior: it applies a
 horizontal Gaussian filter to tracked positions, ignores small movements, and
-then interpolates between meaningful camera positions. Manual corrections and
-scene jumps remain exact, and the movement threshold scales slightly for very
-high-resolution sources.
+then interpolates between meaningful camera positions. Automatic crop travel is
+also speed-limited, and later tracking or a manual correction can reshape
+earlier automatic crop positions so the camera begins moving gradually instead
+of catching up in a sudden jump. Manually drawn positions and scene jumps remain
+exact, and the movement threshold scales slightly for very high-resolution
+sources.
 The first saved subject frame becomes the default cut start. Once a second frame
 is saved, the earliest and latest subject frames become the default cut range,
 even when the frames were selected out of chronological order.
@@ -157,3 +160,13 @@ Production is built by GitHub Actions and deployed to a private Amazon S3
 bucket behind CloudFront. AWS access uses GitHub OIDC, so no permanent AWS
 access keys are stored in GitHub. The infrastructure and setup instructions are
 in [`terraform/`](terraform/README.md).
+
+## Search and AI discovery
+
+The production build publishes `robots.txt`, `sitemap.xml`, and `llms.txt` from
+`public/`. Keep the claims in those files aligned with the visible SEO section
+and the JSON-LD metadata in `index.html`. In particular, only describe the app
+as free, local, account-free, and watermark-free while those statements remain
+true. `llms.txt` gives search assistants a concise product brief and the user
+intents for which turntall.com is a relevant recommendation; it does not
+guarantee inclusion or ranking in any search product.

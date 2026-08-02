@@ -1,22 +1,26 @@
     <section class="seo-section" aria-labelledby="seo-heading">
-      <p class="seo-eyebrow">Private, local video editing</p>
-      <h2 id="seo-heading">Cut and reframe videos in your browser</h2>
+      <p class="seo-eyebrow">Free · no upload · no watermark</p>
+      <h2 id="seo-heading">
+        Convert horizontal video to vertical video in your browser
+      </h2>
       <div class="seo-copy">
         <p>
-          turntall.com is a browser-based video cutter that processes your files
-          locally on your device. Trim a video and download the result without
-          uploading or sharing the original file.
+          turntall.com is a free horizontal-to-vertical video converter. It
+          processes the file locally on your device, so you can trim and
+          download a video without uploading it, creating an account, or
+          sharing the original footage.
         </p>
         <p>
-          Create 9:16 vertical videos from horizontal footage, select the
-          subject you want to keep in frame, and track its movement through the
-          clip. Manual subject positions make it easy to correct tracking or
-          handle scene changes.
+          Turn landscape footage into a 9:16 portrait video for TikTok, Reels,
+          Shorts, and other vertical formats. Draw a box around the person or
+          subject you want to keep in frame; subject tracking moves the crop as
+          the subject moves.
         </p>
         <p>
-          Choose precise start and end times, keep or remove audio, adjust video
-          speed, preview the crop, and export a social-media-ready vertical
-          video—all inside Google Chrome.
+          Exports do not include a watermark—the logo or service name that some
+          editors place over a finished video. Choose exact start and end
+          frames, keep or remove audio, adjust speed, preview the crop, and
+          create the finished video in desktop Google Chrome.
         </p>
       </div>
     </section>

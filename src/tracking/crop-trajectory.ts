@@ -4,6 +4,7 @@ const TIME_EPSILON = 1e-6;
 const PYTRACKER_GAUSSIAN_SIGMA = 5;
 const PYTRACKER_GAUSSIAN_TRUNCATE = 4;
 const PYTRACKER_MOVEMENT_THRESHOLD_PX = 15;
+const MAXIMUM_CROP_SPEED_WIDTHS_PER_SECOND = 0.35;
 
 function centeredCropPosition(
   sourceWidth,
@@ -123,6 +124,58 @@ function gaussianAutomaticLefts(points, sigma) {
   return smoothed;
 }
 
+function limitAutomaticCropSpeed(points, maximumSpeed) {
+  if (
+    points.length < 2 ||
+    !Number.isFinite(maximumSpeed) ||
+    maximumSpeed <= 0
+  ) {
+    return points.map((point) => ({ ...point }));
+  }
+
+  const limited = points.map((point) => ({ ...point }));
+  const clampAutomaticPoint = (index, neighborIndex) => {
+    const point = limited[index];
+    const neighbor = limited[neighborIndex];
+    const crossesJump =
+      index > neighborIndex ? point.jump : neighbor.jump;
+    if (!point.automatic || point.jump || crossesJump) {
+      return false;
+    }
+
+    const elapsed = Math.abs(point.time - neighbor.time);
+    if (!Number.isFinite(elapsed) || elapsed <= TIME_EPSILON) {
+      return false;
+    }
+    const maximumDelta = maximumSpeed * elapsed;
+    const nextLeft = clamp(
+      point.left,
+      neighbor.left - maximumDelta,
+      neighbor.left + maximumDelta,
+    );
+    const changed = Math.abs(nextLeft - point.left) > TIME_EPSILON;
+    point.left = nextLeft;
+    return changed;
+  };
+
+  // Alternating passes let a future manual anchor reshape earlier automatic
+  // positions instead of forcing the crop to catch up in one or two frames.
+  for (let pass = 0; pass < 6; pass += 1) {
+    let changed = false;
+    for (let index = 1; index < limited.length; index += 1) {
+      changed = clampAutomaticPoint(index, index - 1) || changed;
+    }
+    for (let index = limited.length - 2; index >= 0; index -= 1) {
+      changed = clampAutomaticPoint(index, index + 1) || changed;
+    }
+    if (!changed) {
+      break;
+    }
+  }
+
+  return limited;
+}
+
 export function cropPositionAtTime(points, time) {
   if (!points.length) {
     return undefined;
@@ -158,6 +211,7 @@ export function smoothAutomaticCropPositions(
   points,
   sigma = PYTRACKER_GAUSSIAN_SIGMA,
   movementThreshold = PYTRACKER_MOVEMENT_THRESHOLD_PX,
+  maximumSpeed = Number.POSITIVE_INFINITY,
 ) {
   if (points.length < 2) {
     return points.map((point) => ({ ...point }));
@@ -167,10 +221,14 @@ export function smoothAutomaticCropPositions(
     points,
     Math.max(0, sigma),
   );
-  const candidates = points.map((point, index) =>
+  const gaussianCandidates = points.map((point, index) =>
     point.automatic && !point.jump
       ? { ...point, left: smoothedLeft[index] }
       : { ...point },
+  );
+  const candidates = limitAutomaticCropSpeed(
+    gaussianCandidates,
+    maximumSpeed,
   );
   const stabilized = [{ ...candidates[0] }];
   let committedLeft = stabilized[0].left;
@@ -204,18 +262,24 @@ export function stabilizeTrackedReferences(
     cropSize,
     sigma = PYTRACKER_GAUSSIAN_SIGMA,
     movementThreshold = undefined,
+    maximumSpeed = undefined,
   },
 ) {
-  const positioned = references.map((reference, sampleIndex) => ({
-    ...reference,
-    sampleIndex,
-    ...subjectCropPosition(
-      reference,
-      sourceWidth,
-      sourceHeight,
-      cropSize,
-    ),
-  }));
+  const positioned = references.map((reference, sampleIndex) => {
+    const rawReference = reference.automatic
+      ? { ...reference, cropLeft: undefined }
+      : reference;
+    return {
+      ...reference,
+      sampleIndex,
+      ...subjectCropPosition(
+        rawReference,
+        sourceWidth,
+        sourceHeight,
+        cropSize,
+      ),
+    };
+  });
 
   return smoothAutomaticCropPositions(
     positioned,
@@ -226,6 +290,9 @@ export function stabilizeTrackedReferences(
           PYTRACKER_MOVEMENT_THRESHOLD_PX,
           sourceWidth * 0.008,
         ),
+    Number.isFinite(maximumSpeed)
+      ? maximumSpeed
+      : sourceWidth * MAXIMUM_CROP_SPEED_WIDTHS_PER_SECOND,
   ).map((point) => ({
     ...references[point.sampleIndex],
     cropLeft: point.left,

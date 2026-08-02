@@ -130,6 +130,8 @@ export function collectUiElements(root = document) {
     laterSubjectDialog: get("#later-subject-dialog"),
     laterSubjectDialogCopy: get("#later-subject-dialog-copy"),
     restartTrackingDialog: get("#restart-tracking-dialog"),
+    restartTrackingDialogTitle: get("#restart-tracking-dialog-title"),
+    restartTrackingDialogCopy: get("#restart-tracking-dialog-copy"),
     selectionPanel: get("#selection-panel"),
     outputOptionsPanel: get("#output-options-panel"),
     startTime: get("#start-time"),

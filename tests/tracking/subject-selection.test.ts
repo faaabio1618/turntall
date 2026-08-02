@@ -132,6 +132,20 @@ describe("replacing an earlier subject frame", () => {
     expect(subjectReferencesAfter(references, 8, 3)).toEqual([]);
   });
 
+  it("orders boxes by frame when timestamps differ inside one frame", () => {
+    const sameFrame = { id: 1, time: 4.994 };
+    const laterFrame = { id: 2, time: 5.04 };
+    expect(
+      subjectReferencesAfter(
+        [sameFrame, laterFrame],
+        5,
+        undefined,
+        0.005,
+        30,
+      ),
+    ).toEqual([laterFrame]);
+  });
+
   it("can replace a frame and keep later boxes", () => {
     const replacement = { id: 2, time: 5, box: { x: 0.7 } };
 
@@ -146,6 +160,22 @@ describe("replacing an earlier subject frame", () => {
     expect(
       replaceSubjectReference(references, replacement, true),
     ).toEqual([references[0], replacement]);
+  });
+
+  it("keeps timestamp jitter from creating two identities for one frame", () => {
+    const sameFrame = { id: 2, time: 4.994, box: { x: 0.2 } };
+    const laterFrame = { id: 3, time: 5.04, box: { x: 0.3 } };
+    const replacement = { id: 2, time: 5, box: { x: 0.7 } };
+
+    expect(
+      replaceSubjectReference(
+        [sameFrame, laterFrame],
+        replacement,
+        true,
+        0.005,
+        30,
+      ),
+    ).toEqual([replacement]);
   });
 });
 
@@ -220,15 +250,26 @@ describe("restarting automatic tracking", () => {
   ];
 
   it("asks before restarting behind an automatically tracked frame", () => {
-    expect(trackingRestartRequiresDecision(references, 4)).toBe(true);
+    expect(trackingRestartRequiresDecision(references, 4, 30)).toBe(true);
   });
 
   it("continues normally at the latest tracked frame", () => {
-    expect(trackingRestartRequiresDecision(references, 8)).toBe(false);
+    expect(trackingRestartRequiresDecision(references, 8, 30)).toBe(false);
     expect(
       trackingRestartRequiresDecision(
         [{ time: 8, automatic: false }],
         4,
+        30,
+      ),
+    ).toBe(false);
+  });
+
+  it("does not treat timestamp jitter within the stopped frame as moving backward", () => {
+    expect(
+      trackingRestartRequiresDecision(
+        [{ time: 5, automatic: true }],
+        4.994,
+        30,
       ),
     ).toBe(false);
   });

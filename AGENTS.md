@@ -195,9 +195,12 @@ Preserve these unless the user explicitly asks for different behavior:
   subjects. Videos above 50 fps automatically recommend `6x`.
 - Automatic crop motion follows the original Python tracker: horizontally
   smooth tracked samples with a Gaussian sigma of 5, apply a 15-source-pixel
-  movement deadband (scaled slightly for high-resolution video), then
-  interpolate between committed positions. Keep subject boxes untouched and
-  preserve manual positions and scene jumps exactly.
+  movement deadband (scaled slightly for high-resolution video), limit
+  automatic crop travel to roughly 35% of the source width per second, then
+  interpolate between committed positions. New tracking data or a new manual
+  anchor may revise earlier automatic crop positions so the motion can begin
+  gradually. Keep subject boxes untouched and preserve manual positions and
+  scene jumps exactly.
 - Spacebar activates the current primary orange tracking/selection action.
 
 ### Audio and speed

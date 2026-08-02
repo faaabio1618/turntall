@@ -1,4 +1,9 @@
-import { clamp, sameDisplayedTime } from "../media/video-utils.ts";
+import {
+  clamp,
+  frameIndexAtTime,
+  sameDisplayedTime,
+  sameVideoFrame,
+} from "../media/video-utils.ts";
 
 export const MIN_SUBJECT_BOX_SIZE = 0.04;
 
@@ -187,12 +192,25 @@ export function subjectReferencesAfter(
   time,
   excludedId,
   tolerance = 0.005,
+  frameRate = undefined,
 ) {
+  const selectedFrame = frameIndexAtTime(time, frameRate);
   return (references ?? []).filter(
-    (reference) =>
-      reference.id !== excludedId &&
-      Number.isFinite(reference.time) &&
-      reference.time > time + tolerance,
+    (reference) => {
+      if (
+        reference.id === excludedId ||
+        !Number.isFinite(reference.time)
+      ) {
+        return false;
+      }
+      const referenceFrame = frameIndexAtTime(
+        reference.time,
+        frameRate,
+      );
+      return selectedFrame !== undefined && referenceFrame !== undefined
+        ? referenceFrame > selectedFrame
+        : reference.time > time + tolerance;
+    },
   );
 }
 
@@ -206,22 +224,27 @@ export function subjectReferencesNeedingDecision(
     references,
     time,
     excludedId,
+    0.005,
+    frameRate,
   );
   const finalReference = (references ?? [])
     .filter((reference) => Number.isFinite(reference.time))
     .sort((left, right) => left.time - right.time)
     .at(-1);
-  const frameDuration =
-    Number.isFinite(frameRate) && frameRate > 0
-      ? 1 / frameRate
-      : 1 / 30;
+  const selectedFrame = frameIndexAtTime(time, frameRate);
+  const finalFrame = frameIndexAtTime(
+    finalReference?.time,
+    frameRate,
+  );
 
   return laterReferences.filter(
     (reference) =>
       !(
         reference.id === finalReference?.id &&
         reference.automatic === true &&
-        reference.time - time <= frameDuration * 1.1
+        (selectedFrame !== undefined && finalFrame !== undefined
+          ? finalFrame - selectedFrame <= 1
+          : reference.time - time <= 1 / 30)
       ),
   );
 }
@@ -238,38 +261,56 @@ export function subjectReferenceAtTime(
     .filter((reference) => Number.isFinite(reference.time))
     .sort((left, right) => left.time - right.time);
   const lastReference = candidates.at(-1);
-  const frameDuration =
-    Number.isFinite(frameRate) && frameRate > 0
-      ? 1 / frameRate
-      : 1 / 30;
+  const selectedFrame = frameIndexAtTime(time, frameRate);
+  const lastFrame = frameIndexAtTime(lastReference?.time, frameRate);
+  const durationFrame = frameIndexAtTime(duration, frameRate);
   const isTerminalTrackedFrame =
     lastReference?.automatic === true &&
-    Number.isFinite(duration) &&
-    Math.abs(duration - lastReference.time) <= frameDuration * 1.1 &&
-    time < lastReference.time &&
-    lastReference.time - time <= frameDuration * 1.1;
+    (lastFrame !== undefined && durationFrame !== undefined
+      ? lastFrame === durationFrame &&
+        selectedFrame !== undefined &&
+        lastFrame - selectedFrame === 1
+      : Number.isFinite(duration) &&
+        Math.abs(duration - lastReference.time) <= 1 / 30 &&
+        time < lastReference.time &&
+        lastReference.time - time <= 1 / 30);
 
   if (isTerminalTrackedFrame) {
     return lastReference;
   }
 
   return candidates.find((reference) =>
-    sameDisplayedTime(reference.time, time),
+    Number.isFinite(frameRate) && frameRate > 0
+      ? sameVideoFrame(reference.time, time, frameRate)
+      : sameDisplayedTime(reference.time, time),
   );
 }
 
 export function trackingRestartRequiresDecision(
   references,
   currentTime,
+  frameRate,
   tolerance = 0.005,
 ) {
+  const currentFrame = frameIndexAtTime(currentTime, frameRate);
   return (
     Number.isFinite(currentTime) &&
     (references ?? []).some(
-      (reference) =>
-        reference.automatic === true &&
-        Number.isFinite(reference.time) &&
-        reference.time > currentTime + tolerance,
+      (reference) => {
+        if (
+          reference.automatic !== true ||
+          !Number.isFinite(reference.time)
+        ) {
+          return false;
+        }
+        const referenceFrame = frameIndexAtTime(
+          reference.time,
+          frameRate,
+        );
+        return currentFrame !== undefined && referenceFrame !== undefined
+          ? referenceFrame > currentFrame
+          : reference.time > currentTime + tolerance;
+      },
     )
   );
 }
@@ -311,13 +352,29 @@ export function replaceSubjectReference(
   replacement,
   deleteFollowing = false,
   tolerance = 0.005,
+  frameRate = undefined,
 ) {
+  const replacementFrame = frameIndexAtTime(
+    replacement?.time,
+    frameRate,
+  );
   return [
     ...(references ?? []).filter(
-      (reference) =>
-        reference.id !== replacement.id &&
-        (!deleteFollowing ||
-          reference.time <= replacement.time + tolerance),
+      (reference) => {
+        if (reference.id === replacement.id) {
+          return false;
+        }
+        if (!deleteFollowing) {
+          return true;
+        }
+        const referenceFrame = frameIndexAtTime(
+          reference.time,
+          frameRate,
+        );
+        return replacementFrame !== undefined && referenceFrame !== undefined
+          ? referenceFrame <= replacementFrame
+          : reference.time <= replacement.time + tolerance;
+      },
     ),
     replacement,
   ].sort((left, right) => left.time - right.time);
