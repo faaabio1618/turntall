@@ -1,7 +1,17 @@
+import type {
+  SubjectReference,
+  TrackingConfidencePoint,
+} from "../tracking/types.ts";
+
 export interface SubjectEditState {
-  subjectReferences?: Array<{ box?: Record<string, unknown>; [key: string]: any }>;
-  trackingConfidencePoints?: Array<Record<string, unknown>>;
-  [key: string]: any;
+  subjectReferences: SubjectReference[];
+  trackingConfidencePoints: TrackingConfidencePoint[];
+  trackingRequiresCorrection: boolean;
+  suggestedSubjectJumpTime?: number;
+  nextSubjectId: number;
+  start: number;
+  end: number;
+  previewTime: number;
 }
 
 interface SubjectEditEntry {
@@ -9,7 +19,7 @@ interface SubjectEditEntry {
   label: string;
 }
 
-function cloneBox(box?: Record<string, unknown>) {
+function cloneBox(box: SubjectReference["box"]) {
   return box ? { ...box } : box;
 }
 

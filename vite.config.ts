@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import {
   copyFileSync,
@@ -17,7 +17,7 @@ const ffmpegCoreAssets = new Map([
   ["ffmpeg-core.wasm", "application/wasm"],
 ]);
 
-function ffmpegCoreAssetsPlugin() {
+function ffmpegCoreAssetsPlugin(): Plugin {
   return {
     name: "ffmpeg-core-assets",
     configureServer(server) {

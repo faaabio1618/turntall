@@ -3,10 +3,11 @@ import {
   cropRectangleAtTime,
 } from "../tracking/crop-trajectory.ts";
 import { centeredVerticalSize, clamp } from "../media/video-utils.ts";
+import type { SubjectReference } from "../tracking/types.ts";
 
 export function fitPreviewCanvas(
-  width,
-  height,
+  width: number,
+  height: number,
   maxDimension = 720,
 ) {
   if (width <= 0 || height <= 0 || maxDimension <= 0) {
@@ -28,6 +29,10 @@ export function outputPreviewCanDraw({
   readyState,
   seeking,
   framePresented,
+}: {
+  readyState: number;
+  seeking: boolean;
+  framePresented: boolean;
 }) {
   return readyState >= 2 && !seeking && framePresented;
 }
@@ -40,6 +45,14 @@ export function outputPreviewFrame({
   currentTime,
   sourceWidth,
   sourceHeight,
+}: {
+  vertical: boolean;
+  references: SubjectReference[];
+  start: number;
+  end: number;
+  currentTime: number;
+  sourceWidth: number;
+  sourceHeight: number;
 }) {
   if (!vertical) {
     return {
@@ -69,7 +82,7 @@ export function processingPreviewTime({
   start,
   end,
   progress,
-}) {
+}: { start: number; end: number; progress: number }) {
   if (
     !Number.isFinite(start) ||
     !Number.isFinite(end) ||

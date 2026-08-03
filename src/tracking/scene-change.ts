@@ -1,4 +1,5 @@
 import { clamp } from "../media/video-utils.ts";
+import type { PixelFrame } from "./types.ts";
 
 export const DEFAULT_SCENE_CHANGE_THRESHOLD = 30;
 export const DEFAULT_SCENE_CHANGED_RATIO = 0.55;
@@ -9,7 +10,7 @@ interface SceneChangeOptions {
   targetSamples?: number;
 }
 
-function rgbToHsv(red, green, blue) {
+function rgbToHsv(red: number, green: number, blue: number) {
   const r = red / 255;
   const g = green / 255;
   const b = blue / 255;
@@ -40,8 +41,8 @@ function rgbToHsv(red, green, blue) {
 }
 
 export function sceneChangeScore(
-  previousFrame,
-  currentFrame,
+  previousFrame: PixelFrame,
+  currentFrame: PixelFrame,
   options: SceneChangeOptions = {},
 ) {
   if (

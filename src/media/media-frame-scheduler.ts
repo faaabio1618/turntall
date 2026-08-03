@@ -27,14 +27,26 @@ export class MediaFrameScheduler {
     return this.request !== undefined;
   }
 
-  schedule(callback: (...args: any[]) => void) {
+  schedule(
+    callback: (
+      now: DOMHighResTimeStamp,
+      metadata?: VideoFrameCallbackMetadata,
+    ) => void,
+  ) {
     if (this.pending) {
       return false;
     }
 
-    const run = (...args) => {
+    const run = (
+      now: DOMHighResTimeStamp,
+      metadata?: VideoFrameCallbackMetadata,
+    ) => {
       this.request = undefined;
-      callback(...args);
+      if (metadata === undefined) {
+        callback(now);
+      } else {
+        callback(now, metadata);
+      }
     };
 
     if (typeof this.media.requestVideoFrameCallback === "function") {

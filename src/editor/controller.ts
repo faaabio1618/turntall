@@ -19,6 +19,7 @@ import {
   parseMediaProbeLogs,
   processingFailureMessage,
   selectStreamCopyContainer,
+  type EditorMediaInfo,
 } from "../media/media-format.ts";
 import {
   fitPreviewCanvas,
@@ -34,9 +35,13 @@ import {
 import {
   formatStepDuration,
   ProcessingStepTracker,
+  type ProcessingStepId,
 } from "../processing/processing-steps.ts";
 import { editingModeState } from "./editing-modes.ts";
-import { SubjectEditHistory } from "./editor-history.ts";
+import {
+  SubjectEditHistory,
+  type SubjectEditState,
+} from "./editor-history.ts";
 import {
   MIN_SUBJECT_BOX_SIZE,
   alignTimeToSubjectFrame,
@@ -99,7 +104,35 @@ import {
   initializeUi,
   setIconOnlyControl,
   setLabeledControl,
+  type IconName,
 } from "./ui.ts";
+import type {
+  Point,
+  SubjectBox,
+  SubjectReference,
+  TrackingConfidencePoint,
+} from "../tracking/types.ts";
+
+interface SubjectInteraction {
+  pointerId: number;
+  start: Point;
+  type: "draw" | "move" | "resize";
+  originalBox?: SubjectBox;
+  handle?: string;
+}
+
+interface PreviewSubjectGesture {
+  pointerId: number;
+  started: boolean;
+  startClientX: number;
+  startClientY: number;
+  originalBox?: SubjectBox;
+  start?: Point;
+}
+
+interface CancellableConversion {
+  cancel(): Promise<void>;
+}
 const elements = collectUiElements();
 initializeUi(elements);
 
@@ -117,80 +150,83 @@ const outputPreviewStillFrames = new MediaFrameScheduler(
   elements.outputPreviewMedia,
 );
 
-let selectedFile;
-let previewURL;
-let downloadURL;
-let downloadCleanup;
+let selectedFile: File;
+let previewURL: string;
+let downloadURL: string;
+let downloadCleanup: (() => Promise<void>) | undefined;
 let duration = 0;
 let sourceWidth = 0;
 let sourceHeight = 0;
-let ffmpeg;
-let activeLogSink;
-let activeWebConversion;
+let ffmpeg: FFmpeg;
+let activeLogSink: ((message: string) => void) | undefined;
+let activeWebConversion: CancellableConversion | undefined;
 let isUsingWebCodecs = false;
-let webCodecsEditorPromise;
-let decoderNames;
-let mediaInfo;
-let browserPreviewReadable;
+let webCodecsEditorPromise: Promise<typeof import("../processing/webcodecs-editor.ts")>;
+let decoderNames = new Set<string>();
+let mediaInfo: EditorMediaInfo | undefined;
+let browserPreviewReadable: boolean;
 let previewMetadataReady = false;
 let keyframePreparationComplete = false;
-let keyframes = [];
+let keyframes: number[] = [];
 let sourceRevision = 0;
-let pendingReplacementFile;
+let pendingReplacementFile: File | undefined;
 let subjectOnboardingRevision = -1;
-let preparedInputName;
+let preparedInputName: string;
 let preparedRevision = -1;
 let trackingSpeedRecommendationApplied = false;
 let preferredKeepAudio = true;
 let isRunning = false;
 let cancelRequested = false;
 let isSelectingSubject = false;
-let subjectReferences = [];
-let editingSubjectId;
+let subjectReferences: SubjectReference[] = [];
+let editingSubjectId: number | string | undefined;
 let nextSubjectId = 1;
-let draftSubjectBox;
-let previousSubjectBoxBeforeDraw;
+let draftSubjectBox: SubjectBox | undefined;
+let previousSubjectBoxBeforeDraw: SubjectBox | undefined;
 let subjectJumpAutoSelectedByDistance = false;
 let subjectSelectionTime = 0;
-let subjectInteraction;
+let subjectInteraction: SubjectInteraction | undefined;
 let previewControlsBeforeSubject = true;
-let previewSubjectGesture;
+let previewSubjectGesture: PreviewSubjectGesture | undefined;
 let suppressPreviewClick = false;
-let pendingSubjectSave;
+let pendingSubjectSave: {
+  reference: SubjectReference;
+  isNewReference: boolean;
+} | undefined;
 let isTrackingSubject = false;
 let stopTrackingRequested = false;
 let pendingFrameStepAfterTracking = 0;
-let trackingLastGoodTime;
-let trackingRequestedStopTime;
-let trackingStoppedFrameTime;
-let trackingLiveBox;
-let trackingSessionAnchorTime;
+let trackingLastGoodTime: number | undefined;
+let trackingRequestedStopTime: number | undefined;
+let trackingStoppedFrameTime: number | undefined;
+let trackingLiveBox: SubjectBox | undefined;
+let trackingSessionAnchorTime: number | undefined;
 let trackingRequiresCorrection = false;
-let trackingConfidencePoints = [];
-let trackingConfidenceDisplayRange;
+let trackingConfidencePoints: TrackingConfidencePoint[] = [];
+let trackingConfidenceDisplayRange: { start: number; end: number } | undefined;
 let trackingStatusFollowsPreviewFrame = false;
-let suggestedSubjectJumpTime;
-let trackingCanvas;
+let suggestedSubjectJumpTime: number | undefined;
+let trackingCanvas: HTMLCanvasElement;
 let previewControlsBeforeTracking = true;
 let previewMutedBeforeTracking = false;
-let previewPresentedTime;
+let previewPresentedTime: number | undefined;
 let outputPreviewReady = false;
 let outputPreviewFinished = false;
 let outputPreviewStarting = false;
-let outputPreviewPendingSeek;
-let outputPreviewDraggingPointer;
+let outputPreviewPendingSeek: number;
+let outputPreviewDraggingPointer: number;
 let outputPreviewFramePresented = false;
-let outputPreviewPresentedTime;
-let processingEstimateStartedAt;
-let processingTimeEstimator;
-let processingEstimateTimer;
-let lastProcessingProgressAt;
-let processingStepTracker;
-let activeProcessingStepId;
-let processingStepAction;
-let processingSegmentDuration;
+let outputPreviewPresentedTime: number | undefined;
+let processingEstimateStartedAt: number;
+let processingTimeEstimator: ProgressTimeEstimator;
+let processingEstimateTimer: ReturnType<typeof setInterval> | undefined;
+let lastProcessingProgressAt: number;
+let processingStepTracker: ProcessingStepTracker;
+let activeProcessingStepId: ProcessingStepId | undefined;
+let processingStepAction: string;
+let processingSegmentDuration: number;
 let lastProcessingPreviewUpdateAt = 0;
-let reencodeCopyStatusTimer;
+let reencodeCopyStatusTimer: ReturnType<typeof setTimeout> | undefined;
 const subjectEditHistory = new SubjectEditHistory();
 
 const MAX_VISIBLE_KEYFRAME_MARKS = 240;
@@ -274,7 +310,7 @@ function editorLocked() {
   return isRunning || isSelectingSubject || isTrackingSubject;
 }
 
-function setVideoPreparationState(preparing, message = "") {
+function setVideoPreparationState(preparing: boolean, message = "") {
   if (preparing) {
     elements.preview.pause();
   }
@@ -287,7 +323,7 @@ function setVideoPreparationState(preparing, message = "") {
   }
 }
 
-function updateVideoPreparationMessage(revision, message) {
+function updateVideoPreparationMessage(revision: number, message: string) {
   if (
     revision === sourceRevision &&
     !elements.videoPreparationOverlay.hidden
@@ -296,7 +332,7 @@ function updateVideoPreparationMessage(revision, message) {
   }
 }
 
-function finishVideoPreparation(revision) {
+function finishVideoPreparation(revision: number) {
   if (
     revision === sourceRevision &&
     previewMetadataReady &&
@@ -311,7 +347,7 @@ function dismissSubjectOnboarding() {
   elements.subjectOnboarding.classList.remove("active");
 }
 
-function showSubjectOnboarding(revision) {
+function showSubjectOnboarding(revision: number) {
   if (
     revision !== sourceRevision ||
     revision === subjectOnboardingRevision ||
@@ -343,11 +379,14 @@ function subjectEditState() {
   };
 }
 
-function recordSubjectEdit(label) {
+function recordSubjectEdit(label: string) {
   subjectEditHistory.record(subjectEditState(), label);
 }
 
-function restoreSubjectEdit(entry, direction) {
+function restoreSubjectEdit(
+  entry: { state: SubjectEditState; label: string } | undefined,
+  direction: "undo" | "redo",
+) {
   if (!entry) {
     return;
   }
@@ -450,14 +489,14 @@ function previewFrameNumber(time = sourcePreviewTime()) {
   return frameNumberAtTime(time, mediaInfo?.frameRate);
 }
 
-function subjectFrameLabel(time) {
+function subjectFrameLabel(time: number) {
   const frameNumber = previewFrameNumber(time);
   return frameNumber === undefined
     ? formatTime(time)
     : `frame ${frameNumber}`;
 }
 
-function sameSubjectFrame(first, second) {
+function sameSubjectFrame(first: number, second: number) {
   const frameRate = mediaInfo?.frameRate;
   return Number.isFinite(frameRate) && frameRate > 0
     ? sameVideoFrame(first, second, frameRate)
@@ -595,7 +634,10 @@ function scheduleCropPreviewFrame(force = false) {
     return;
   }
 
-  const renderNextFrame = (_now, metadata) => {
+  const renderNextFrame = (
+    _now: DOMHighResTimeStamp,
+    metadata?: VideoFrameCallbackMetadata,
+  ) => {
     previewPresentedTime = Number.isFinite(metadata?.mediaTime)
       ? metadata.mediaTime
       : elements.preview.currentTime;
@@ -624,7 +666,10 @@ function scheduleOutputPreviewStillFrame() {
     return;
   }
 
-  const drawPresentedFrame = (_now, metadata) => {
+  const drawPresentedFrame = (
+    _now: DOMHighResTimeStamp,
+    metadata?: VideoFrameCallbackMetadata,
+  ) => {
     outputPreviewPresentedTime = Number.isFinite(metadata?.mediaTime)
       ? metadata.mediaTime
       : elements.outputPreviewMedia.currentTime;
@@ -634,7 +679,7 @@ function scheduleOutputPreviewStillFrame() {
   outputPreviewStillFrames.schedule(drawPresentedFrame);
 }
 
-function setOutputPreviewMediaTime(time) {
+function setOutputPreviewMediaTime(time: number) {
   stopOutputPreviewStillFrame();
   outputPreviewFramePresented = false;
   outputPreviewPresentedTime = undefined;
@@ -676,7 +721,7 @@ function updateOutputPreviewControls() {
     elements.outputPreviewToggle.disabled;
   elements.outputPreviewSeek.max = String(segmentDuration || 1);
   elements.outputPreviewSeek.value = String(displayedCurrent);
-  const previewControl = outputPreviewStarting
+  const previewControl: { label: string; icon: IconName } = outputPreviewStarting
     ? { label: "Loading", icon: "loading" }
     : elements.outputPreviewMedia.paused
       ? outputPreviewFinished
@@ -780,7 +825,10 @@ function scheduleOutputPreviewFrame() {
     return;
   }
 
-  const renderNextFrame = (_now, metadata) => {
+  const renderNextFrame = (
+    _now: DOMHighResTimeStamp,
+    metadata?: VideoFrameCallbackMetadata,
+  ) => {
     outputPreviewPresentedTime = Number.isFinite(metadata?.mediaTime)
       ? metadata.mediaTime
       : elements.outputPreviewMedia.currentTime;
@@ -803,7 +851,7 @@ function pauseOutputPreview() {
   updateOutputPreviewControls();
 }
 
-function seekOutputPreview(relativeTime) {
+function seekOutputPreview(relativeTime: number) {
   if (!outputPreviewReady || !outputPreviewSelectionIsValid()) {
     return;
   }
@@ -820,7 +868,7 @@ function seekOutputPreview(relativeTime) {
   updateOutputPreviewControls();
 }
 
-function seekOutputPreviewFromPointer(event) {
+function seekOutputPreviewFromPointer(event: PointerEvent) {
   if (elements.outputPreviewSeek.disabled) {
     return;
   }
@@ -836,7 +884,7 @@ function seekOutputPreviewFromPointer(event) {
   seekOutputPreview((end - start) * progress);
 }
 
-function refreshOutputPreview(sourceTime = undefined) {
+function refreshOutputPreview(sourceTime: number | undefined = undefined) {
   pauseOutputPreview();
   outputPreviewFinished = false;
   outputPreviewPendingSeek = undefined;
@@ -877,7 +925,7 @@ function restoreOutputPreviewMode() {
   syncOutputPreviewAudio();
 }
 
-function syncOutputPreviewToProcessing(progress, force = false) {
+function syncOutputPreviewToProcessing(progress: number, force = false) {
   if (
     !outputPreviewReady ||
     !outputPreviewSelectionIsValid() ||
@@ -1081,7 +1129,7 @@ function setTrackingStatus(
   elements.trackingStatus.classList.toggle("warning", warning);
 }
 
-function renderViewingSubjectFrameStatus(time) {
+function renderViewingSubjectFrameStatus(time: number) {
   if (
     subjectReferences.length === 0 ||
     !subjectBoxAtTime(subjectReferences, time)
@@ -1260,7 +1308,11 @@ function renderTrackingConfidenceTimeline() {
   renderTrackingStabilizationTail();
 }
 
-function recordTrackingConfidence(time, confidence, manual = false) {
+function recordTrackingConfidence(
+  time: number,
+  confidence: number,
+  manual = false,
+) {
   if (!Number.isFinite(time) || !Number.isFinite(confidence)) {
     return;
   }
@@ -1279,7 +1331,7 @@ function recordTrackingConfidence(time, confidence, manual = false) {
   renderTrackingConfidenceTimeline();
 }
 
-function confidencePointFromClientX(clientX) {
+function confidencePointFromClientX(clientX: number) {
   const range = trackingConfidenceDisplayRange;
   if (!range) {
     return undefined;
@@ -1293,7 +1345,9 @@ function confidencePointFromClientX(clientX) {
   );
 }
 
-function reviewTrackingConfidencePoint(point) {
+function reviewTrackingConfidencePoint(
+  point: TrackingConfidencePoint | undefined,
+) {
   if (!point || isRunning || isTrackingSubject || isSelectingSubject) {
     return;
   }
@@ -1365,7 +1419,9 @@ function renderSubjectReferences() {
   elements.subjectReferences.hidden = visibleReferences.length === 0;
 }
 
-function updateSubjectSummary(outputPreviewTime = undefined) {
+function updateSubjectSummary(
+  outputPreviewTime: number | undefined = undefined,
+) {
   const count = subjectReferences.length;
   elements.subjectPicker.hidden = count === 0 && !isSelectingSubject;
   elements.clearSubject.hidden = count === 0;
@@ -1376,7 +1432,7 @@ function updateSubjectSummary(outputPreviewTime = undefined) {
   refreshOutputPreview(outputPreviewTime);
 }
 
-function setSubjectSelectionMode(selecting) {
+function setSubjectSelectionMode(selecting: boolean) {
   isSelectingSubject = selecting;
   elements.subjectPicker.hidden =
     !selecting && subjectReferences.length === 0;
@@ -1410,7 +1466,7 @@ function setSubjectSelectionMode(selecting) {
 }
 
 function beginSubjectSelection(
-  referenceId = undefined,
+  referenceId: number | string | undefined = undefined,
   { forceNew = false } = {},
 ) {
   if (
@@ -1505,9 +1561,9 @@ function applySubjectTimeBounds() {
 }
 
 function saveSubjectReference(
-  reference,
-  isNewReference,
-  deleteFollowing,
+  reference: SubjectReference,
+  isNewReference: boolean,
+  deleteFollowing: boolean,
 ) {
   recordSubjectEdit(
     deleteFollowing
@@ -1692,7 +1748,7 @@ function captureTrackingFrame() {
   return context.getImageData(0, 0, width, height);
 }
 
-function seekPreviewForTracking(time) {
+function seekPreviewForTracking(time: number): Promise<number> {
   const frameRate = mediaInfo?.frameRate;
   const frameIndex = frameIndexAtTime(time, frameRate);
   const target = clamp(
@@ -1709,7 +1765,7 @@ function seekPreviewForTracking(time) {
     return Promise.resolve(sourcePreviewTime());
   }
 
-  return new Promise((resolve, reject) => {
+  return new Promise<number>((resolve, reject) => {
     const timeout = window.setTimeout(() => {
       cleanup();
       reject(new Error("The next video frame took too long to load."));
@@ -1740,7 +1796,7 @@ function seekPreviewForTracking(time) {
   });
 }
 
-function yieldTrackingFrame(frameStartedAt, frameInterval) {
+function yieldTrackingFrame(frameStartedAt: number, frameInterval: number) {
   const remainingMilliseconds = trackingWaitMilliseconds(
     frameInterval,
     1,
@@ -1752,8 +1808,8 @@ function yieldTrackingFrame(frameStartedAt, frameInterval) {
 }
 
 function stabilizeSubjectPath(
-  references,
-  { fixedBeforeTime = undefined } = {},
+  references: SubjectReference[],
+  { fixedBeforeTime = undefined }: { fixedBeforeTime?: number } = {},
 ) {
   return stabilizeTrackedReferences(
     [...references].sort((left, right) => left.time - right.time),
@@ -1770,7 +1826,10 @@ function stabilizeSubjectPath(
   }));
 }
 
-function saveTrackedReferences(samples, sessionAnchorTime) {
+function saveTrackedReferences(
+  samples: SubjectReference[],
+  sessionAnchorTime: number | undefined,
+) {
   let combinedReferences = [...subjectReferences];
 
   for (const sample of samples.slice(1)) {
@@ -1815,8 +1874,11 @@ function saveTrackedReferences(samples, sessionAnchorTime) {
   updateSubjectSummary();
 }
 
-function requestTrackingRestartDecision(currentTime, latestTrackedTime) {
-  return new Promise((resolve) => {
+function requestTrackingRestartDecision(
+  currentTime: number,
+  latestTrackedTime: number | undefined,
+) {
+  return new Promise<string>((resolve) => {
     elements.restartTrackingDialogTitle.textContent =
       `Restart tracking from ${subjectFrameLabel(currentTime)}?`;
     elements.restartTrackingDialogCopy.textContent =
@@ -2154,7 +2216,7 @@ function stopFollowingSubject() {
   );
 }
 
-function pointerPosition(event) {
+function pointerPosition(event: Pick<PointerEvent, "clientX" | "clientY">) {
   return normalizedPoint(
     event.clientX,
     event.clientY,
@@ -2191,12 +2253,13 @@ function suggestNewPositionFromDraft() {
   elements.subjectJumpRow.classList.add("auto-selected");
 }
 
-function beginSubjectPointerInteraction(event) {
+function beginSubjectPointerInteraction(event: PointerEvent) {
   if (!isSelectingSubject || (event.button !== 0 && event.pointerType !== "touch")) {
     return;
   }
 
-  if (event.target.closest("#cancel-subject")) {
+  const target = event.target instanceof HTMLElement ? event.target : undefined;
+  if (target?.closest("#cancel-subject")) {
     return;
   }
 
@@ -2204,9 +2267,9 @@ function beginSubjectPointerInteraction(event) {
   const originalBox = draftSubjectBox
     ? { ...draftSubjectBox }
     : undefined;
-  const handle = event.target.dataset.handle;
+  const handle = target?.dataset.handle;
   const movingBox =
-    originalBox && event.target.closest("#subject-box");
+    originalBox && target?.closest("#subject-box");
   const type = handle ? "resize" : movingBox ? "move" : "draw";
 
   subjectInteraction = {
@@ -2225,7 +2288,7 @@ function beginSubjectPointerInteraction(event) {
   event.preventDefault();
 }
 
-function updateSubjectPointerInteraction(event) {
+function updateSubjectPointerInteraction(event: PointerEvent) {
   if (subjectInteraction?.pointerId !== event.pointerId) {
     return;
   }
@@ -2263,7 +2326,7 @@ function updateSubjectPointerInteraction(event) {
   event.preventDefault();
 }
 
-function finishSubjectPointerInteraction(event) {
+function finishSubjectPointerInteraction(event: PointerEvent) {
   if (subjectInteraction?.pointerId !== event.pointerId) {
     return;
   }
@@ -2282,7 +2345,7 @@ function finishSubjectPointerInteraction(event) {
   renderSubjectBox();
 }
 
-function beginPreviewSubjectGesture(event) {
+function beginPreviewSubjectGesture(event: PointerEvent) {
   if (
     editorLocked() ||
     browserPreviewReadable !== true ||
@@ -2320,7 +2383,7 @@ function beginPreviewSubjectGesture(event) {
   };
 }
 
-function updatePreviewSubjectGesture(event) {
+function updatePreviewSubjectGesture(event: PointerEvent) {
   if (previewSubjectGesture?.pointerId !== event.pointerId) {
     return;
   }
@@ -2366,7 +2429,7 @@ function updatePreviewSubjectGesture(event) {
   event.preventDefault();
 }
 
-function finishPreviewSubjectGesture(event) {
+function finishPreviewSubjectGesture(event: PointerEvent) {
   if (previewSubjectGesture?.pointerId !== event.pointerId) {
     return;
   }
@@ -2395,7 +2458,7 @@ function toggleSourcePreviewPlayback() {
   }
 }
 
-function handlePreviewClick(event) {
+function handlePreviewClick(event: { clientY: number; preventDefault: () => void; stopPropagation: () => void; }) {
   const previewRect = elements.preview.getBoundingClientRect();
   const controlGuard = elements.preview.controls
     ? Math.min(
@@ -2626,7 +2689,7 @@ function updateFrameStepControls() {
     "Arrow keys: one frame · Ctrl+Z: undo · Spacebar activates the orange button";
 }
 
-function stepPreviewFrame(direction) {
+function stepPreviewFrame(direction: number) {
   const frameDirection = Math.sign(direction);
   if (frameDirection === 0) {
     return;
@@ -2672,7 +2735,7 @@ function stepPreviewFrame(direction) {
   updateFrameStepControls();
 }
 
-function handlePreviewKeyboardShortcut(event) {
+function handlePreviewKeyboardShortcut(event: KeyboardEvent) {
   const isPlainSpace =
     !event.altKey &&
     !event.ctrlKey &&
@@ -2796,7 +2859,12 @@ function updateSelectionSummary() {
   return valid;
 }
 
-function setTime(kind, rawValue, seekPreview = false, snap = false) {
+function setTime(
+  kind: "start" | "end",
+  rawValue: number,
+  seekPreview = false,
+  snap = false,
+) {
   const clampedValue = clamp(rawValue, 0, duration);
   const value =
     snap && elements.snapKeyframes.checked && keyframes.length
@@ -2867,7 +2935,7 @@ function releaseLoadedVideo() {
   resetFFmpegEngine();
 }
 
-function setBusy(busy) {
+function setBusy(busy: boolean) {
   isRunning = busy;
   if (busy) {
     pauseOutputPreview();
@@ -2879,7 +2947,7 @@ function setBusy(busy) {
 }
 
 function setStatus(
-  message,
+  message: string,
   showProgress = false,
   indeterminate = false,
   isError = false,
@@ -2898,9 +2966,9 @@ function setStatus(
 }
 
 function startProcessingEstimate(
-  message,
-  processLabel,
-  segmentDuration,
+  message: string,
+  processLabel: string,
+  segmentDuration: number,
 ) {
   const now = performance.now();
   processingStepTracker = new ProcessingStepTracker(processLabel);
@@ -2933,7 +3001,7 @@ function stopProcessingEstimate() {
   elements.timeEstimate.hidden = true;
 }
 
-function startProcessingStep(stepId, action) {
+function startProcessingStep(stepId: ProcessingStepId, action: string) {
   if (!processingStepTracker) {
     return;
   }
@@ -2983,7 +3051,7 @@ function completeProcessingSteps() {
   renderProcessingSteps();
 }
 
-function stopProcessingSteps(state) {
+function stopProcessingSteps(state: "cancelled" | "failed") {
   if (!processingStepTracker) {
     return;
   }
@@ -2995,7 +3063,7 @@ function stopProcessingSteps(state) {
   renderProcessingSteps();
 }
 
-function setProcessingStepAction(action) {
+function setProcessingStepAction(action: string) {
   processingStepAction = action;
   renderProcessingSteps();
 }
@@ -3092,7 +3160,7 @@ function updateProcessingWaitMessage() {
   renderProcessingSteps();
 }
 
-function updateEngineProgress(progress) {
+function updateEngineProgress(progress: number) {
   if (!Number.isFinite(progress)) {
     return;
   }
@@ -3112,7 +3180,7 @@ function updateEngineProgress(progress) {
   updateProcessingProgress(progress);
 }
 
-function updateProcessingProgress(progress) {
+function updateProcessingProgress(progress: number) {
   if (!Number.isFinite(progress)) {
     return;
   }
@@ -3196,8 +3264,8 @@ async function loadFFmpeg() {
   return ffmpeg;
 }
 
-async function loadDecoderCapabilities(engine) {
-  const logLines = [];
+async function loadDecoderCapabilities(engine: FFmpeg) {
+  const logLines: string[] = [];
   activeLogSink = (message) => logLines.push(message);
 
   try {
@@ -3208,7 +3276,7 @@ async function loadDecoderCapabilities(engine) {
   }
 }
 
-async function prepareInput(engine, revision) {
+async function prepareInput(engine: FFmpeg, revision: number) {
   if (requiresStreamingInput(selectedFile?.size)) {
     throw new Error(
       "Large video files must use the streaming input path.",
@@ -3318,7 +3386,7 @@ async function copyReencodeCommand() {
   }, 2000);
 }
 
-async function detectStreamingKeyframes(revision) {
+async function detectStreamingKeyframes(revision: number) {
   updateVideoPreparationMessage(
     revision,
     "Reading video details…",
@@ -3433,7 +3501,7 @@ async function detectStreamingKeyframes(revision) {
   elements.resultPanel.hidden = true;
 }
 
-async function detectKeyframes(revision) {
+async function detectKeyframes(revision: number) {
   if (!selectedFile || revision !== sourceRevision) {
     return;
   }
@@ -3464,7 +3532,7 @@ async function detectKeyframes(revision) {
       "Finding keyframes. Large files can take a moment…",
     );
     setStatus("Preparing fast cut points…", true);
-    const probeLogs = [];
+    const probeLogs: string[] = [];
     activeLogSink = (message) => probeLogs.push(message);
 
     const exitCode = await engine.exec(
@@ -3550,7 +3618,10 @@ async function detectKeyframes(revision) {
     }
 
     const reportData = await engine.readFile(reportName);
-    const report = new TextDecoder().decode(reportData);
+    const report =
+      typeof reportData === "string"
+        ? reportData
+        : new TextDecoder().decode(reportData.slice());
     keyframes = parseFramecrcKeyframes(report, duration);
 
     renderKeyframeMarks();
@@ -3654,7 +3725,7 @@ async function cutVideo() {
       })
     : undefined;
   const subjectGuided = vertical && subjectReferences.length > 0;
-  const operationLogs = [];
+  const operationLogs: string[] = [];
   const processingMessage = vertical
     ? subjectGuided
       ? "Tracking the subject and creating the vertical video…"
@@ -3706,7 +3777,7 @@ async function cutVideo() {
               void conversion.cancel();
             }
           },
-          onPhase: (phase) => {
+          onPhase: (phase: string) => {
             if (phase === "preparing") {
               setProcessingStepAction("Preparing the source");
             } else if (phase === "processing") {
@@ -3782,7 +3853,7 @@ async function cutVideo() {
       data instanceof Blob
         ? data
         : new Blob(
-            [data instanceof Uint8Array ? data.buffer : data],
+            [data instanceof Uint8Array ? data.slice() : data],
             { type: outputContainer.mimeType },
           );
     downloadURL = URL.createObjectURL(blob);
@@ -3836,7 +3907,7 @@ async function cutVideo() {
   }
 }
 
-function loadVideo(file) {
+function loadVideo(file: File) {
   sourceRevision += 1;
   dismissSubjectOnboarding();
   releaseLoadedVideo();
@@ -4057,22 +4128,22 @@ elements.outputPreviewMedia.addEventListener("error", () => {
 });
 
 elements.startTime.addEventListener("input", () =>
-  setTime("start", elements.startTime.value, true),
+  setTime("start", Number(elements.startTime.value), true),
 );
 elements.startTime.addEventListener("change", () =>
-  setTime("start", elements.startTime.value, true, true),
+  setTime("start", Number(elements.startTime.value), true, true),
 );
 elements.endTime.addEventListener("input", () =>
-  setTime("end", elements.endTime.value, true),
+  setTime("end", Number(elements.endTime.value), true),
 );
 elements.endTime.addEventListener("change", () =>
-  setTime("end", elements.endTime.value, true, true),
+  setTime("end", Number(elements.endTime.value), true, true),
 );
 elements.startRange.addEventListener("input", () =>
-  setTime("start", elements.startRange.value, true, true),
+  setTime("start", Number(elements.startRange.value), true, true),
 );
 elements.endRange.addEventListener("input", () =>
-  setTime("end", elements.endRange.value, true, true),
+  setTime("end", Number(elements.endRange.value), true, true),
 );
 elements.snapKeyframes.addEventListener("change", updateMode);
 elements.verticalMode.addEventListener("change", () => {
@@ -4108,7 +4179,7 @@ elements.stopFollowing.addEventListener(
 );
 elements.trackingConfidenceCanvas.addEventListener(
   "click",
-  (event) => {
+  (event: MouseEvent) => {
     reviewTrackingConfidencePoint(
       confidencePointFromClientX(event.clientX),
     );
@@ -4116,7 +4187,7 @@ elements.trackingConfidenceCanvas.addEventListener(
 );
 elements.trackingConfidenceCanvas.addEventListener(
   "keydown",
-  (event) => {
+  (event: { key: string; preventDefault: () => void; }) => {
     if (
       event.key !== "ArrowLeft" &&
       event.key !== "ArrowRight" &&
@@ -4230,7 +4301,7 @@ elements.outputPreviewToggle.addEventListener(
 elements.outputPreviewSeek.addEventListener("input", () => {
   seekOutputPreview(Number(elements.outputPreviewSeek.value));
 });
-elements.outputPreviewSeek.addEventListener("pointerdown", (event) => {
+elements.outputPreviewSeek.addEventListener("pointerdown", (event: PointerEvent) => {
   if (elements.outputPreviewSeek.disabled) {
     return;
   }

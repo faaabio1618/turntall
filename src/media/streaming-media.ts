@@ -10,14 +10,14 @@ export const MEDIA_LOADING_STRATEGY = Object.freeze({
 });
 
 export function requiresStreamingInput(
-  fileSize,
+  fileSize: number | undefined,
   limit = MAX_WASM_INPUT_BYTES,
 ) {
   return Number.isFinite(fileSize) && fileSize > limit;
 }
 
 export function mediaLoadingStrategy(
-  fileSize,
+  fileSize: number | undefined,
   limit = MAX_WASM_INPUT_BYTES,
 ) {
   return requiresStreamingInput(fileSize, limit)
@@ -25,7 +25,7 @@ export function mediaLoadingStrategy(
     : MEDIA_LOADING_STRATEGY.MEMORY;
 }
 
-export function containerNamesForFilename(filename) {
+export function containerNamesForFilename(filename: string) {
   const extension = filename
     .toLowerCase()
     .match(/\.([a-z0-9]{1,5})$/)?.[1];
@@ -46,11 +46,11 @@ export function containerNamesForFilename(filename) {
   return extension ? [extension] : [];
 }
 
-function ffmpegVideoCodec(codec) {
+function ffmpegVideoCodec(codec: string) {
   return codec === "avc" ? "h264" : codec;
 }
 
-function assertCurrent(isCancelled) {
+function assertCurrent(isCancelled?: () => boolean) {
   if (isCancelled?.()) {
     throw new DOMException("Video preparation cancelled.", "AbortError");
   }
@@ -82,7 +82,7 @@ export async function analyzeStreamingMedia(
       return {
         readable: false,
         containerNames: containerNamesForFilename(file.name),
-        keyframes: [],
+        keyframes: [] as number[],
       };
     }
 
@@ -98,7 +98,7 @@ export async function analyzeStreamingMedia(
     assertCurrent(isCancelled);
 
     const sink = new EncodedPacketSink(videoTrack);
-    const containerKeyframes = [];
+    const containerKeyframes: number[] = [];
     const options = { metadataOnly: true };
     let packet = await sink.getFirstKeyPacket(options);
     while (packet) {

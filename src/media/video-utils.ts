@@ -1,6 +1,6 @@
 export const KEYFRAME_TOLERANCE_SECONDS = 0.025;
 
-export function formatTime(totalSeconds) {
+export function formatTime(totalSeconds: number) {
   const safeSeconds = Math.max(0, Number(totalSeconds) || 0);
   const minutes = Math.floor(safeSeconds / 60);
   const seconds = safeSeconds % 60;
@@ -9,7 +9,7 @@ export function formatTime(totalSeconds) {
     .padStart(5, "0")}`;
 }
 
-export function formatBytes(bytes) {
+export function formatBytes(bytes: number) {
   const units = ["B", "KB", "MB", "GB"];
   let value = bytes;
   let unit = units[0];
@@ -23,18 +23,24 @@ export function formatBytes(bytes) {
 }
 
 export function defaultOutputFilename(
-  sourceName,
-  { vertical = false, extension = "mp4" } = {},
+  sourceName: string,
+  { vertical = false, extension = "mp4" }: {
+    vertical?: boolean;
+    extension?: string;
+  } = {},
 ) {
   const baseName = String(sourceName || "video").replace(/\.[^.]+$/, "");
   return `${baseName}-${vertical ? "vertical" : "cut"}.${extension}`;
 }
 
-export function clamp(value, min, max) {
+export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(Number(value) || 0, min), max);
 }
 
-export function sameDisplayedTime(first, second) {
+export function sameDisplayedTime(
+  first: number | string,
+  second: number | string,
+) {
   const firstTime = Number(first);
   const secondTime = Number(second);
 
@@ -45,7 +51,10 @@ export function sameDisplayedTime(first, second) {
   );
 }
 
-export function frameIndexAtTime(time, frameRate) {
+export function frameIndexAtTime(
+  time: number | undefined,
+  frameRate: number | undefined,
+) {
   const numericTime = Number(time);
   const numericFrameRate = Number(frameRate);
   if (
@@ -59,21 +68,28 @@ export function frameIndexAtTime(time, frameRate) {
   return Math.max(0, Math.round(numericTime * numericFrameRate));
 }
 
-export function frameNumberAtTime(time, frameRate) {
+export function frameNumberAtTime(
+  time: number | undefined,
+  frameRate: number | undefined,
+) {
   const frameIndex = frameIndexAtTime(time, frameRate);
   return frameIndex === undefined ? undefined : frameIndex + 1;
 }
 
-export function sameVideoFrame(first, second, frameRate) {
+export function sameVideoFrame(
+  first: number,
+  second: number,
+  frameRate: number,
+) {
   const firstFrame = frameIndexAtTime(first, frameRate);
   const secondFrame = frameIndexAtTime(second, frameRate);
   return firstFrame !== undefined && firstFrame === secondFrame;
 }
 
 export function presentedFrameTime(
-  currentTime,
-  mediaTime,
-  frameRate,
+  currentTime: number | undefined,
+  mediaTime: number | undefined,
+  frameRate: number | undefined,
 ) {
   if (!Number.isFinite(currentTime)) {
     return Number.isFinite(mediaTime) ? mediaTime : 0;
@@ -92,10 +108,10 @@ export function presentedFrameTime(
 }
 
 export function frameStepTime(
-  currentTime,
-  direction,
-  frameRate,
-  duration,
+  currentTime: number,
+  direction: number,
+  frameRate: number | undefined,
+  duration: number,
 ) {
   const safeFrameRate =
     Number.isFinite(frameRate) && frameRate > 0 ? frameRate : 30;
@@ -121,7 +137,7 @@ export function spaceShortcutAction({
   return canFollow ? "follow-forward" : "none";
 }
 
-export function centeredVerticalSize(width, height) {
+export function centeredVerticalSize(width: number, height: number) {
   const targetRatio = 9 / 16;
   let cropWidth;
   let cropHeight;
@@ -137,7 +153,7 @@ export function centeredVerticalSize(width, height) {
   return { width: cropWidth, height: cropHeight };
 }
 
-export function normalizeKeyframes(timestamps, duration) {
+export function normalizeKeyframes(timestamps: number[], duration: number) {
   return [
     ...new Set(
       timestamps
@@ -147,17 +163,17 @@ export function normalizeKeyframes(timestamps, duration) {
             timestamp >= 0 &&
             timestamp <= duration,
         )
-        .map((timestamp) => timestamp.toFixed(6)),
+        .map((timestamp: number) => timestamp.toFixed(6)),
     ),
   ]
     .map(Number)
     .sort((left, right) => left - right);
 }
 
-export function parseFramecrcKeyframes(report, duration) {
+export function parseFramecrcKeyframes(report: string, duration: number) {
   const lines = report.split(/\r?\n/);
   const timeBaseMatch = lines
-    .find((line) => line.startsWith("#tb 0:"))
+    .find((line: string) => line.startsWith("#tb 0:"))
     ?.match(/#tb 0:\s*(\d+)\/(\d+)/);
 
   if (!timeBaseMatch) {
@@ -172,12 +188,12 @@ export function parseFramecrcKeyframes(report, duration) {
       continue;
     }
 
-    const fields = line.split(",").map((field) => field.trim());
+    const fields = line.split(",").map((field: string) => field.trim());
     if (fields.length < 6 || fields[0] !== "0") {
       continue;
     }
 
-    const flagField = fields.find((field) => field.startsWith("F=0x"));
+    const flagField = fields.find((field: string) => field.startsWith("F=0x"));
     const flags = flagField
       ? Number.parseInt(flagField.slice(4), 16)
       : 1;
@@ -191,13 +207,13 @@ export function parseFramecrcKeyframes(report, duration) {
   return normalizeKeyframes(timestamps, duration);
 }
 
-export function keyframeBoundaries(keyframes, duration) {
+export function keyframeBoundaries(keyframes: number[], duration: number) {
   const boundaries = keyframes.slice();
 
   if (
     duration > 0 &&
     !boundaries.some(
-      (keyframe) =>
+      (keyframe: number) =>
         Math.abs(keyframe - duration) <= KEYFRAME_TOLERANCE_SECONDS,
     )
   ) {
@@ -207,7 +223,11 @@ export function keyframeBoundaries(keyframes, duration) {
   return boundaries;
 }
 
-export function nearestKeyframe(rawValue, duration, keyframes) {
+export function nearestKeyframe(
+  rawValue: number,
+  duration: number,
+  keyframes: number[],
+) {
   const value = clamp(rawValue, 0, duration);
   const boundaries = keyframeBoundaries(keyframes, duration);
 
@@ -230,10 +250,10 @@ export function nearestKeyframe(rawValue, duration, keyframes) {
 }
 
 export function isKeyframeBoundary(
-  value,
-  kind,
-  duration,
-  keyframes,
+  value: number,
+  kind: string,
+  duration: number,
+  keyframes: number[],
   tolerance = KEYFRAME_TOLERANCE_SECONDS,
 ) {
   if (
@@ -244,10 +264,10 @@ export function isKeyframeBoundary(
   }
 
   return keyframes.some(
-    (keyframe) => Math.abs(keyframe - value) <= tolerance,
+    (keyframe: number) => Math.abs(keyframe - value) <= tolerance,
   );
 }
 
-export function suggestedTrackingFrameSkip(frameRate) {
+export function suggestedTrackingFrameSkip(frameRate: number | undefined) {
   return Number.isFinite(frameRate) && frameRate > 50 ? 4 : 1;
 }

@@ -1,5 +1,5 @@
 const STEP_IDS = ["prepare", "process", "finalize"] as const;
-type ProcessingStepId = (typeof STEP_IDS)[number];
+export type ProcessingStepId = (typeof STEP_IDS)[number];
 type ProcessingStepState = "waiting" | "active" | "done" | "cancelled" | "failed";
 
 interface ProcessingStep {
@@ -107,7 +107,7 @@ export class ProcessingStepTracker {
   }
 }
 
-export function formatStepDuration(seconds) {
+export function formatStepDuration(seconds: number | undefined) {
   if (!Number.isFinite(seconds) || seconds < 0) {
     return "";
   }

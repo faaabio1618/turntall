@@ -11,13 +11,11 @@ import {
   QUALITY_HIGH,
   StreamTarget,
   type ConversionVideoOptions,
+  type InputAudioTrack,
+  type VideoSample,
 } from "mediabunny";
 import { cropRectangleAtTime } from "../tracking/crop-trajectory.ts";
-
-interface CropSize {
-  width: number;
-  height: number;
-}
+import type { CropPoint, CropSize } from "../tracking/types.ts";
 
 interface WebCodecsConversionOptions {
   start?: number;
@@ -26,7 +24,7 @@ interface WebCodecsConversionOptions {
   sourceWidth: number;
   sourceHeight: number;
   cropSize: CropSize;
-  cropTrajectory?: any[];
+  cropTrajectory?: CropPoint[];
   keepAudio?: boolean;
   playbackRate?: number;
   diskBacked?: boolean;
@@ -34,14 +32,14 @@ interface WebCodecsConversionOptions {
 
 interface CutWithWebCodecsOptions extends WebCodecsConversionOptions {
   onProgress?: (progress: number) => void;
-  onConversion?: (conversion: any) => void;
+  onConversion?: (conversion: Conversion | undefined) => void;
   onPhase?: (phase: "preparing" | "processing" | "finalizing") => void;
 }
 
 export function centeredCropRectangle(
-  sourceWidth,
-  sourceHeight,
-  cropSize,
+  sourceWidth: number,
+  sourceHeight: number,
+  cropSize: CropSize,
 ) {
   return {
     left: Math.floor((sourceWidth - cropSize.width) / 2),
@@ -51,15 +49,18 @@ export function centeredCropRectangle(
   };
 }
 
-export function reportOutputFinalization(output, onFinalizing) {
+export function reportOutputFinalization(
+  output: Output,
+  onFinalizing: () => void,
+) {
   const finalize = output.finalize.bind(output);
   let reported = false;
-  output.finalize = (...args) => {
+  output.finalize = () => {
     if (!reported) {
       reported = true;
       onFinalizing?.();
     }
-    return finalize(...args);
+    return finalize();
   };
 }
 
@@ -70,7 +71,7 @@ function nativeCodecsAvailable() {
   );
 }
 
-function trajectoryMoves(trajectory) {
+function trajectoryMoves(trajectory?: CropPoint[]) {
   if (!trajectory || trajectory.length < 2) {
     return false;
   }
@@ -82,7 +83,10 @@ function trajectoryMoves(trajectory) {
   );
 }
 
-function createMovingCropProcessor(cropSize, cropTrajectory) {
+function createMovingCropProcessor(
+  cropSize: CropSize,
+  cropTrajectory: CropPoint[],
+) {
   const canvas =
     typeof OffscreenCanvas !== "undefined"
       ? new OffscreenCanvas(cropSize.width, cropSize.height)
@@ -95,7 +99,7 @@ function createMovingCropProcessor(cropSize, cropTrajectory) {
     throw new Error("The browser cannot prepare the moving crop.");
   }
 
-  return (sample) => {
+  return (sample: VideoSample) => {
     const crop = cropRectangleAtTime(
       cropTrajectory,
       sample.timestamp,
@@ -116,7 +120,7 @@ function createMovingCropProcessor(cropSize, cropTrajectory) {
   };
 }
 
-export function retimeVideoSample(sample, playbackRate) {
+export function retimeVideoSample(sample: VideoSample, playbackRate: number) {
   if (Math.abs(playbackRate - 1) <= 0.000001) {
     return sample;
   }
@@ -130,6 +134,11 @@ export function shouldCopyTrimmedAudioPackets({
   start,
   firstTimestamp,
   canDecode,
+}: {
+  keepAudio: boolean;
+  start: number;
+  firstTimestamp: number;
+  canDecode: boolean;
 }) {
   return (
     keepAudio &&
@@ -140,10 +149,10 @@ export function shouldCopyTrimmedAudioPackets({
 }
 
 async function attachPacketCopiedAudio(
-  conversion,
-  output,
-  track,
-  { start, end },
+  conversion: Conversion,
+  output: Output<Mp4OutputFormat, BufferTarget | StreamTarget>,
+  track: InputAudioTrack,
+  { start, end }: { start: number; end: number; },
 ) {
   const codec = await track.getCodec();
   if (!codec) {
@@ -158,8 +167,13 @@ async function attachPacketCopiedAudio(
 
   // Conversion owns output.start()/finalize(). Register this packet pump
   // alongside its video work so finalization waits for copied audio too.
-  conversion._trackPromises.push((async () => {
-    await conversion._started;
+  const internalConversion = conversion as Conversion & {
+    _trackPromises: Promise<void>[];
+    _started: Promise<void>;
+    _canceled: boolean;
+  };
+  internalConversion._trackPromises.push((async () => {
+    await internalConversion._started;
     let packet = firstPacket;
     let first = true;
 
@@ -167,7 +181,7 @@ async function attachPacketCopiedAudio(
       while (
         packet &&
         packet.timestamp < end &&
-        !conversion._canceled
+        !internalConversion._canceled
       ) {
         const adjustedPacket = packet.clone({
           timestamp: Math.max(0, packet.timestamp - start),
@@ -187,13 +201,13 @@ async function attachPacketCopiedAudio(
   })());
 }
 
-async function createOutputTarget(diskBacked) {
+async function createOutputTarget(diskBacked: boolean) {
   if (!diskBacked || !navigator.storage?.getDirectory) {
     const target = new BufferTarget();
     return {
       target,
       getResult: () => target.buffer,
-      cleanup: undefined,
+      cleanup: undefined as undefined | (() => Promise<void>),
     };
   }
 

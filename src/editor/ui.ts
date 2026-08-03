@@ -40,15 +40,20 @@ const ICONS = {
   trash: Trash2,
 };
 
-function requiredElement(selector, root = document) {
+function requiredElement<T extends Element>(
+  selector: string,
+  root: ParentNode = document,
+): T {
   const element = root.querySelector(selector);
   if (!element) {
     throw new Error(`Required UI element not found: ${selector}`);
   }
-  return element;
+  return element as T;
 }
 
-function icon(name, size = 18) {
+export type IconName = keyof typeof ICONS;
+
+function icon(name: IconName, size = 18) {
   const iconDefinition = ICONS[name];
   if (!iconDefinition) {
     throw new Error(`Unknown UI icon: ${name}`);
@@ -61,43 +66,48 @@ function icon(name, size = 18) {
   });
 }
 
-export function setLabeledControl(control, label, iconName) {
+export function setLabeledControl(
+  control: Element,
+  label: string,
+  iconName: IconName,
+) {
   control.replaceChildren(
     icon(iconName),
     document.createTextNode(label),
   );
 }
 
-export function setIconOnlyControl(control, iconName) {
+export function setIconOnlyControl(control: Element, iconName: IconName) {
   control.replaceChildren(icon(iconName));
 }
 
-export function collectUiElements(root = document) {
-  const get = (selector) => requiredElement(selector, root);
+export function collectUiElements(root: ParentNode = document) {
+  const get = <T extends Element = HTMLElement>(selector: string) =>
+    requiredElement<T>(selector, root);
 
   return {
     brandMark: get("#brand-mark"),
-    browserGate: get("#browser-gate"),
+    browserGate: get<HTMLDialogElement>("#browser-gate"),
     mobileWarning: get("#mobile-warning"),
-    fileInput: get("#file-input"),
+    fileInput: get<HTMLInputElement>("#file-input"),
     fileDetails: get("#file-details"),
     formatSummary: get("#format-summary"),
     reencodeSuggestion: get("#reencode-suggestion"),
     reencodeCommand: get("#reencode-command"),
-    copyReencodeCommand: get("#copy-reencode-command"),
+    copyReencodeCommand: get<HTMLButtonElement>("#copy-reencode-command"),
     reencodeCopyStatus: get("#reencode-copy-status"),
-    ffmpegDownloadLink: get("#ffmpeg-download-link"),
+    ffmpegDownloadLink: get<HTMLAnchorElement>("#ffmpeg-download-link"),
     videoPanel: get("#video-panel"),
     videoFps: get("#video-fps"),
     previewStage: get("#preview-stage"),
-    preview: get("#preview"),
+    preview: get<HTMLVideoElement>("#preview"),
     videoPreparationOverlay: get("#video-preparation-overlay"),
     videoPreparationMessage: get("#video-preparation-message"),
     frameStepControls: get("#frame-step-controls"),
     frameStepHelp: get("#frame-step-help"),
     cropPreview: get("#crop-preview"),
     cropPreviewLabel: get("#crop-preview-label"),
-    previewFrameIndicator: get("#preview-frame-indicator"),
+    previewFrameIndicator: get<HTMLOutputElement>("#preview-frame-indicator"),
     subjectOnboarding: get("#subject-onboarding"),
     subjectOverlay: get("#subject-overlay"),
     subjectInstruction: get("#subject-instruction"),
@@ -108,68 +118,68 @@ export function collectUiElements(root = document) {
     trackingBox: get("#tracking-box"),
     subjectPicker: get("#subject-picker"),
     subjectEditActions: get("#subject-edit-actions"),
-    clearSubject: get("#clear-subject"),
+    clearSubject: get<HTMLButtonElement>("#clear-subject"),
     subjectTrackingActions: get("#subject-tracking-actions"),
-    followSubject: get("#follow-subject"),
-    stopFollowing: get("#stop-following"),
-    trackingFrameSkip: get("#tracking-frame-skip"),
+    followSubject: get<HTMLButtonElement>("#follow-subject"),
+    stopFollowing: get<HTMLButtonElement>("#stop-following"),
+    trackingFrameSkip: get<HTMLSelectElement>("#tracking-frame-skip"),
     speedTooltip: get(".tooltip-trigger"),
     trackingStatus: get("#tracking-status"),
     trackingStatusMessage: get("#tracking-status-message"),
     trackingStatusShortcut: get("#tracking-status-shortcut"),
     trackingConfidence: get("#tracking-confidence"),
-    trackingConfidenceCanvas: get("#tracking-confidence-canvas"),
+    trackingConfidenceCanvas: get<HTMLCanvasElement>("#tracking-confidence-canvas"),
     trackingConfidencePlayhead: get("#tracking-confidence-playhead"),
     trackingStabilizationTail: get("#tracking-stabilization-tail"),
     trackingConfidenceStart: get("#tracking-confidence-start"),
     trackingConfidenceEnd: get("#tracking-confidence-end"),
-    confirmSubject: get("#confirm-subject"),
-    cancelSubject: get("#cancel-subject"),
+    confirmSubject: get<HTMLButtonElement>("#confirm-subject"),
+    cancelSubject: get<HTMLButtonElement>("#cancel-subject"),
     subjectJumpRow: get("#subject-jump-row"),
-    subjectJump: get("#subject-jump"),
+    subjectJump: get<HTMLInputElement>("#subject-jump"),
     subjectReferences: get("#subject-references"),
-    clearSubjectDialog: get("#clear-subject-dialog"),
-    replaceVideoDialog: get("#replace-video-dialog"),
-    laterSubjectDialog: get("#later-subject-dialog"),
+    clearSubjectDialog: get<HTMLDialogElement>("#clear-subject-dialog"),
+    replaceVideoDialog: get<HTMLDialogElement>("#replace-video-dialog"),
+    laterSubjectDialog: get<HTMLDialogElement>("#later-subject-dialog"),
     laterSubjectDialogCopy: get("#later-subject-dialog-copy"),
-    restartTrackingDialog: get("#restart-tracking-dialog"),
+    restartTrackingDialog: get<HTMLDialogElement>("#restart-tracking-dialog"),
     restartTrackingDialogTitle: get("#restart-tracking-dialog-title"),
     restartTrackingDialogCopy: get("#restart-tracking-dialog-copy"),
     selectionPanel: get("#selection-panel"),
     outputOptionsPanel: get("#output-options-panel"),
-    startTime: get("#start-time"),
-    endTime: get("#end-time"),
-    startRange: get("#start-range"),
-    endRange: get("#end-range"),
+    startTime: get<HTMLInputElement>("#start-time"),
+    endTime: get<HTMLInputElement>("#end-time"),
+    startRange: get<HTMLInputElement>("#start-range"),
+    endRange: get<HTMLInputElement>("#end-range"),
     startKeyframes: get("#start-keyframes"),
     endKeyframes: get("#end-keyframes"),
-    setStart: get("#set-start"),
-    setEnd: get("#set-end"),
+    setStart: get<HTMLButtonElement>("#set-start"),
+    setEnd: get<HTMLButtonElement>("#set-end"),
     selectionSummary: get("#selection-summary"),
     keyframeSummary: get("#keyframe-summary"),
-    snapKeyframes: get("#snap-keyframes"),
+    snapKeyframes: get<HTMLInputElement>("#snap-keyframes"),
     cutModeHelp: get("#cut-mode-help"),
-    verticalMode: get("#vertical-mode"),
+    verticalMode: get<HTMLInputElement>("#vertical-mode"),
     verticalHelp: get("#vertical-help"),
-    keepAudio: get("#keep-audio"),
+    keepAudio: get<HTMLInputElement>("#keep-audio"),
     audioHelp: get("#audio-help"),
-    videoSpeed: get("#video-speed"),
-    videoSpeedValue: get("#video-speed-value"),
+    videoSpeed: get<HTMLInputElement>("#video-speed"),
+    videoSpeedValue: get<HTMLOutputElement>("#video-speed-value"),
     cropSummary: get("#crop-summary"),
     outputPreviewPanel: get("#output-preview-panel"),
     outputPreviewStage: get(".output-preview-stage"),
-    outputPreviewMedia: get("#output-preview-media"),
-    outputPreviewCanvas: get("#output-preview-canvas"),
-    outputPreviewFrameIndicator: get("#output-preview-frame-indicator"),
-    outputPreviewToggle: get("#output-preview-toggle"),
-    outputPreviewSeek: get("#output-preview-seek"),
-    outputPreviewTime: get("#output-preview-time"),
+    outputPreviewMedia: get<HTMLVideoElement>("#output-preview-media"),
+    outputPreviewCanvas: get<HTMLCanvasElement>("#output-preview-canvas"),
+    outputPreviewFrameIndicator: get<HTMLOutputElement>("#output-preview-frame-indicator"),
+    outputPreviewToggle: get<HTMLButtonElement>("#output-preview-toggle"),
+    outputPreviewSeek: get<HTMLInputElement>("#output-preview-seek"),
+    outputPreviewTime: get<HTMLOutputElement>("#output-preview-time"),
     outputPreviewNote: get("#output-preview-note"),
-    cutButton: get("#cut-button"),
-    cancelButton: get("#cancel-button"),
+    cutButton: get<HTMLButtonElement>("#cut-button"),
+    cancelButton: get<HTMLButtonElement>("#cancel-button"),
     resultPanel: get("#result-panel"),
     status: get("#status"),
-    progress: get("#progress"),
+    progress: get<HTMLProgressElement>("#progress"),
     timeEstimate: get("#time-estimate"),
     processingSteps: get("#processing-steps"),
     processingStepRows: {
@@ -184,13 +194,13 @@ export function collectUiElements(root = document) {
     },
     processingStepProcessLabel: get("#processing-step-process-label"),
     downloadControls: get("#download-controls"),
-    outputFilename: get("#output-filename"),
-    downloadLink: get("#download-link"),
+    outputFilename: get<HTMLInputElement>("#output-filename"),
+    downloadLink: get<HTMLAnchorElement>("#download-link"),
   };
 }
 
 export function initializeUi(
-  elements,
+  elements: ReturnType<typeof collectUiElements>,
   browserNavigator: BrowserNavigator = navigator as BrowserNavigator,
 ) {
   const isMobileBrowser =
@@ -201,7 +211,7 @@ export function initializeUi(
   elements.mobileWarning.hidden = !isMobileBrowser;
 
   if (!isGoogleChrome(browserNavigator)) {
-    elements.browserGate.addEventListener("cancel", (event) => {
+    elements.browserGate.addEventListener("cancel", (event: { preventDefault: () => void; }) => {
       event.preventDefault();
     });
     elements.browserGate.addEventListener("close", () => {

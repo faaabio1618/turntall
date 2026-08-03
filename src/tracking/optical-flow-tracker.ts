@@ -1,11 +1,12 @@
 import { clamp } from "../media/video-utils.ts";
+import type { PixelFrame, Point, SubjectBox, TrackingResult } from "./types.ts";
 
 const PATCH_RADIUS = 2;
 const MAX_FEATURES = 28;
 const MIN_FEATURE_DISTANCE = 5;
 const FORWARD_BACKWARD_ERROR_PIXELS = 2.5;
 
-function grayscale(frame) {
+function grayscale(frame: PixelFrame) {
   const pixels = new Uint8Array(frame.width * frame.height);
   for (let index = 0; index < pixels.length; index += 1) {
     const offset = index * 4;
@@ -18,7 +19,7 @@ function grayscale(frame) {
   return pixels;
 }
 
-function median(values) {
+function median(values: number[]) {
   if (values.length === 0) {
     return 0;
   }
@@ -29,7 +30,20 @@ function median(values) {
     : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
-function featureCandidates(pixels, width, height, box) {
+interface FeaturePoint extends Point {
+  score: number;
+}
+
+interface FeatureMatch extends Point {
+  difference: number;
+}
+
+function featureCandidates(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  box: SubjectBox,
+) {
   const margin = PATCH_RADIUS + 1;
   const left = clamp(Math.floor(box.x * width) + margin, margin, width - margin - 1);
   const right = clamp(
@@ -43,7 +57,7 @@ function featureCandidates(pixels, width, height, box) {
     margin,
     height - margin - 1,
   );
-  const candidates = [];
+  const candidates: FeaturePoint[] = [];
 
   for (let y = top; y <= bottom; y += 2) {
     for (let x = left; x <= right; x += 2) {
@@ -75,7 +89,7 @@ function featureCandidates(pixels, width, height, box) {
   candidates.sort((leftPoint, rightPoint) =>
     rightPoint.score - leftPoint.score,
   );
-  const selected = [];
+  const selected: { x: number; y: number; score: number; }[] = [];
   for (const candidate of candidates) {
     if (
       selected.every(
@@ -95,13 +109,13 @@ function featureCandidates(pixels, width, height, box) {
 }
 
 function patchDifference(
-  previous,
-  current,
-  width,
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
+  previous: Uint8Array,
+  current: Uint8Array,
+  width: number,
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number,
 ) {
   let difference = 0;
   let samples = 0;
@@ -118,14 +132,14 @@ function patchDifference(
 }
 
 function matchFeature(
-  previous,
-  current,
-  width,
-  height,
-  point,
-  radius,
-) {
-  let best;
+  previous: Uint8Array<ArrayBuffer>,
+  current: Uint8Array<ArrayBuffer>,
+  width: number,
+  height: number,
+  point: Point,
+  radius: number,
+): FeatureMatch | undefined {
+  let best: FeatureMatch | undefined;
   const minX = Math.max(PATCH_RADIUS, point.x - radius);
   const maxX = Math.min(width - PATCH_RADIUS - 1, point.x + radius);
   const minY = Math.max(PATCH_RADIUS, point.y - radius);
@@ -150,27 +164,31 @@ function matchFeature(
   return best;
 }
 
-function center(box) {
+function center(box: SubjectBox) {
   return {
     x: box.x + box.width / 2,
     y: box.y + box.height / 2,
   };
 }
 
-function blendBoxes(left, right, rightWeight) {
+function blendBoxes(
+  left: SubjectBox,
+  right: SubjectBox,
+  rightWeight: number,
+): SubjectBox {
   const weight = clamp(rightWeight, 0, 1);
-  return Object.fromEntries(
-    ["x", "y", "width", "height"].map((property) => [
-      property,
-      left[property] * (1 - weight) + right[property] * weight,
-    ]),
-  );
+  return {
+    x: left.x * (1 - weight) + right.x * weight,
+    y: left.y * (1 - weight) + right.y * weight,
+    width: left.width * (1 - weight) + right.width * weight,
+    height: left.height * (1 - weight) + right.height * weight,
+  };
 }
 
 export function trackOpticalFlow(
-  previousFrame,
-  currentFrame,
-  previousBox,
+  previousFrame: PixelFrame,
+  currentFrame: PixelFrame,
+  previousBox: SubjectBox,
   options: { radius?: number } = {},
 ) {
   if (
@@ -347,7 +365,11 @@ export function trackOpticalFlow(
   };
 }
 
-export function selectTrackingResult(mode, templateResult, flowResult) {
+export function selectTrackingResult(
+  mode: "automatic" | "large" | "smooth",
+  templateResult: TrackingResult | undefined,
+  flowResult: TrackingResult | undefined,
+): TrackingResult {
   if (mode === "smooth") {
     return { ...flowResult, tracker: "smooth" };
   }

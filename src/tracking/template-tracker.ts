@@ -1,8 +1,15 @@
 import { clamp } from "../media/video-utils.ts";
+import type {
+  PixelBox,
+  PixelFrame,
+  SubjectBox,
+  TrackingConfidencePoint,
+  TrackingTemplate,
+} from "./types.ts";
 
 const DEFAULT_GRID_SIZE = 18;
 
-function pixelBox(box, width, height) {
+function pixelBox(box: SubjectBox, width: number, height: number): PixelBox {
   const left = clamp(Math.round(box.x * width), 0, width - 1);
   const top = clamp(Math.round(box.y * height), 0, height - 1);
   const boxWidth = clamp(
@@ -19,7 +26,7 @@ function pixelBox(box, width, height) {
   return { left, top, width: boxWidth, height: boxHeight };
 }
 
-function lumaAt(frame, x, y) {
+function lumaAt(frame: PixelFrame, x: number, y: number) {
   const clampedX = clamp(Math.round(x), 0, frame.width - 1);
   const clampedY = clamp(Math.round(y), 0, frame.height - 1);
   const offset = (clampedY * frame.width + clampedX) * 4;
@@ -31,7 +38,18 @@ function lumaAt(frame, x, y) {
   );
 }
 
-function sampleBox(frame, box, columns, rows) {
+interface TrackingSample {
+  values: Float32Array;
+  mean: number;
+  deviation: number;
+}
+
+function sampleBox(
+  frame: PixelFrame,
+  box: PixelBox,
+  columns: number,
+  rows: number,
+): TrackingSample {
   const values = new Float32Array(columns * rows);
   let total = 0;
   let totalSquared = 0;
@@ -56,7 +74,10 @@ function sampleBox(frame, box, columns, rows) {
   return { values, mean, deviation: Math.sqrt(variance) };
 }
 
-function normalizedError(template, candidate) {
+function normalizedError(
+  template: TrackingSample,
+  candidate: TrackingSample,
+) {
   let error = 0;
   const templateScale = Math.max(12, template.deviation);
   const candidateScale = Math.max(12, candidate.deviation);
@@ -72,7 +93,12 @@ function normalizedError(template, candidate) {
   return error / template.values.length;
 }
 
-function candidateAt(frame, template, left, top) {
+function candidateAt(
+  frame: PixelFrame,
+  template: TrackingTemplate,
+  left: number,
+  top: number,
+) {
   const box = {
     left: clamp(
       Math.round(left),
@@ -101,12 +127,12 @@ function candidateAt(frame, template, left, top) {
 }
 
 function searchCandidates(
-  frame,
-  template,
-  previous,
-  radiusX,
-  radiusY,
-  step,
+  frame: PixelFrame,
+  template: TrackingTemplate,
+  previous: PixelBox,
+  radiusX: number,
+  radiusY: number,
+  step: number,
 ) {
   const candidates = [];
   const minLeft = Math.max(0, previous.left - radiusX);
@@ -134,8 +160,8 @@ function searchCandidates(
 }
 
 export function createTrackingTemplate(
-  frame,
-  normalizedBox,
+  frame: PixelFrame,
+  normalizedBox: SubjectBox,
   gridSize = DEFAULT_GRID_SIZE,
 ) {
   const box = pixelBox(normalizedBox, frame.width, frame.height);
@@ -157,9 +183,9 @@ export function createTrackingTemplate(
 }
 
 export function trackTemplate(
-  frame,
-  template,
-  previousNormalizedBox,
+  frame: PixelFrame,
+  template: TrackingTemplate,
+  previousNormalizedBox: SubjectBox,
   options: {
     radiusX?: number;
     radiusY?: number;
@@ -239,9 +265,9 @@ export function trackTemplate(
 }
 
 export function updateTrackingTemplate(
-  template,
-  frame,
-  normalizedBox,
+  template: TrackingTemplate,
+  frame: PixelFrame,
+  normalizedBox: SubjectBox,
   amount = 0.08,
 ) {
   const box = pixelBox(normalizedBox, frame.width, frame.height);
@@ -271,8 +297,8 @@ export function updateTrackingTemplate(
 }
 
 export function trackingWaitMilliseconds(
-  frameIntervalSeconds,
-  playbackSpeed,
+  frameIntervalSeconds: number,
+  playbackSpeed: number,
   elapsedMilliseconds = 0,
 ) {
   const safeSpeed =
@@ -287,7 +313,7 @@ export function trackingWaitMilliseconds(
 }
 
 export function trackingFrameInterval(
-  frameRate,
+  frameRate: number | undefined,
   frameSkip = 1,
   fallbackFrameRate = 30,
 ) {
@@ -303,7 +329,7 @@ export function trackingFrameInterval(
 }
 
 export function trackingConfidenceHue(
-  confidence,
+  confidence: number,
   threshold = 0.38,
 ) {
   const safeThreshold = clamp(threshold, 0, 0.99);
@@ -317,7 +343,10 @@ export function trackingConfidenceHue(
   );
 }
 
-export function nearestTrackingConfidencePoint(points, time) {
+export function nearestTrackingConfidencePoint(
+  points: TrackingConfidencePoint[],
+  time: number,
+) {
   if (!points?.length || !Number.isFinite(time)) {
     return undefined;
   }

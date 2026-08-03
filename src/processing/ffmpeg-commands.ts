@@ -1,6 +1,7 @@
 import { createFFmpegCropFilter } from "../tracking/crop-trajectory.ts";
+import type { CropPoint, CropSize } from "../tracking/types.ts";
 
-export function createKeyframeScanArgs(inputName, outputName = "keyframes.txt") {
+export function createKeyframeScanArgs(inputName: string, outputName = "keyframes.txt") {
   return [
     "-hide_banner",
     "-i",
@@ -16,7 +17,7 @@ export function createKeyframeScanArgs(inputName, outputName = "keyframes.txt") 
   ];
 }
 
-export function createDecodeProbeArgs(inputName) {
+export function createDecodeProbeArgs(inputName: string) {
   return [
     "-hide_banner",
     "-v",
@@ -46,6 +47,17 @@ export function createCutArgs({
   accurate,
   keepAudio = true,
   playbackRate = 1,
+}: {
+  inputName: string;
+  outputName: string;
+  start: number;
+  end: number;
+  vertical: boolean;
+  cropSize: CropSize;
+  cropTrajectory?: CropPoint[];
+  accurate: boolean;
+  keepAudio?: boolean;
+  playbackRate?: number;
 }) {
   const speedChanged = Math.abs(playbackRate - 1) > 0.000001;
   const needsDecoding = vertical || accurate || speedChanged;

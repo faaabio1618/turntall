@@ -1,6 +1,6 @@
 export function estimateRemainingSeconds(
-  progress,
-  elapsedSeconds,
+  progress: number,
+  elapsedSeconds: number,
 ) {
   if (
     !Number.isFinite(progress) ||
@@ -45,7 +45,7 @@ export class ProgressTimeEstimator {
     this.lastEstimateElapsedSeconds = undefined;
   }
 
-  update(progress, elapsedSeconds) {
+  update(progress: number, elapsedSeconds: number) {
     if (
       !Number.isFinite(progress) ||
       !Number.isFinite(elapsedSeconds) ||
@@ -139,7 +139,10 @@ export class ProgressTimeEstimator {
   }
 }
 
-export function progressFromProcessingLog(message, durationSeconds) {
+export function progressFromProcessingLog(
+  message: string,
+  durationSeconds: number,
+) {
   if (
     typeof message !== "string" ||
     !Number.isFinite(durationSeconds) ||
@@ -166,7 +169,7 @@ export function progressFromProcessingLog(message, durationSeconds) {
   return Math.min(1, Math.max(0, processedSeconds / durationSeconds));
 }
 
-export function formatEstimatedTime(totalSeconds) {
+export function formatEstimatedTime(totalSeconds: number | undefined) {
   if (!Number.isFinite(totalSeconds) || totalSeconds < 0) {
     return "";
   }

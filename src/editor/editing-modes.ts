@@ -3,6 +3,11 @@ export function editingModeState({
   vertical,
   canReencode,
   snapping,
+}: {
+  isRunning: boolean;
+  vertical: boolean;
+  canReencode: boolean;
+  snapping: boolean;
 }) {
   return {
     exactCut: vertical || !snapping,

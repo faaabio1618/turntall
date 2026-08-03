@@ -4,14 +4,15 @@ import {
   sameDisplayedTime,
   sameVideoFrame,
 } from "../media/video-utils.ts";
+import type { Point, SubjectBox, SubjectReference } from "./types.ts";
 
 export const MIN_SUBJECT_BOX_SIZE = 0.04;
 
 export function containedMediaRect(
-  containerWidth,
-  containerHeight,
-  mediaWidth,
-  mediaHeight,
+  containerWidth: number,
+  containerHeight: number,
+  mediaWidth: number,
+  mediaHeight: number,
 ) {
   if (
     containerWidth <= 0 ||
@@ -42,14 +43,14 @@ export function containedMediaRect(
   };
 }
 
-export function normalizedPoint(clientX, clientY, rect) {
+export function normalizedPoint(clientX: number, clientY: number, rect: { left: number; width: number; top: number; height: number; }) {
   return {
     x: clamp((clientX - rect.left) / rect.width, 0, 1),
     y: clamp((clientY - rect.top) / rect.height, 0, 1),
   };
 }
 
-export function boxFromPoints(start, end) {
+export function boxFromPoints(start: Point, end: Point): SubjectBox {
   const left = clamp(Math.min(start.x, end.x), 0, 1);
   const top = clamp(Math.min(start.y, end.y), 0, 1);
   const right = clamp(Math.max(start.x, end.x), 0, 1);
@@ -63,7 +64,7 @@ export function boxFromPoints(start, end) {
   };
 }
 
-export function moveBox(box, deltaX, deltaY) {
+export function moveBox(box: SubjectBox, deltaX: number, deltaY: number): SubjectBox {
   return {
     ...box,
     x: clamp(box.x + deltaX, 0, 1 - box.width),
@@ -72,10 +73,10 @@ export function moveBox(box, deltaX, deltaY) {
 }
 
 export function resizeBox(
-  box,
-  handle,
-  deltaX,
-  deltaY,
+  box: SubjectBox,
+  handle: string,
+  deltaX: number,
+  deltaY: number,
   minimumSize = MIN_SUBJECT_BOX_SIZE,
 ) {
   let left = box.x;
@@ -105,7 +106,7 @@ export function resizeBox(
 }
 
 export function isValidSubjectBox(
-  box,
+  box: SubjectBox | undefined,
   minimumSize = MIN_SUBJECT_BOX_SIZE,
 ) {
   const epsilon = 1e-9;
@@ -125,11 +126,11 @@ export function isValidSubjectBox(
   );
 }
 
-export function subjectTimeBounds(references) {
+export function subjectTimeBounds(references: SubjectReference[]) {
   const times = (references ?? [])
     .map(({ time }) => time)
     .filter((time) => Number.isFinite(time))
-    .sort((left, right) => left - right);
+    .sort((left: number, right: number) => left - right);
 
   if (times.length === 0) {
     return undefined;
@@ -145,9 +146,9 @@ export function subjectTimeBounds(references) {
 }
 
 export function alignTimeToSubjectFrame(
-  references,
-  time,
-  frameRate,
+  references: SubjectReference[],
+  time: number,
+  frameRate: number | undefined,
 ) {
   const frame = frameIndexAtTime(time, frameRate);
   if (frame === undefined) {
@@ -161,20 +162,24 @@ export function alignTimeToSubjectFrame(
         frameIndexAtTime(reference.time, frameRate) === frame,
     )
     .sort(
-      (left, right) =>
+      (left: { time: number; }, right: { time: number; }) =>
         Math.abs(left.time - time) - Math.abs(right.time - time),
     )[0];
 
   return matchingReference?.time ?? time;
 }
 
-export function subjectBoxAtTime(references, time, jumpTolerance = 0) {
+export function subjectBoxAtTime(
+  references: SubjectReference[],
+  time: number,
+  jumpTolerance = 0,
+): SubjectBox | undefined {
   const points = (references ?? [])
     .filter(
       (reference) =>
         Number.isFinite(reference.time) && reference.box,
     )
-    .sort((left, right) => left.time - right.time);
+    .sort((left: { time: number; }, right: { time: number; }) => left.time - right.time);
 
   if (points.length === 0) {
     return undefined;
@@ -203,14 +208,16 @@ export function subjectBoxAtTime(references, time, jumpTolerance = 0) {
         span <= 1e-6
           ? 1
           : clamp((time - previous.time) / span, 0, 1);
-      return Object.fromEntries(
-        ["x", "y", "width", "height"].map((property) => [
-          property,
-          previous.box[property] +
-            (next.box[property] - previous.box[property]) *
-              progress,
-        ]),
-      );
+      return {
+        x: previous.box.x + (next.box.x - previous.box.x) * progress,
+        y: previous.box.y + (next.box.y - previous.box.y) * progress,
+        width:
+          previous.box.width +
+          (next.box.width - previous.box.width) * progress,
+        height:
+          previous.box.height +
+          (next.box.height - previous.box.height) * progress,
+      };
     }
   }
 
@@ -218,11 +225,11 @@ export function subjectBoxAtTime(references, time, jumpTolerance = 0) {
 }
 
 export function subjectReferencesAfter(
-  references,
-  time,
-  excludedId,
+  references: SubjectReference[],
+  time: number,
+  excludedId: number | string | undefined,
   tolerance = 0.005,
-  frameRate = undefined,
+  frameRate: number | undefined = undefined,
 ) {
   const selectedFrame = frameIndexAtTime(time, frameRate);
   return (references ?? []).filter(
@@ -245,10 +252,10 @@ export function subjectReferencesAfter(
 }
 
 export function subjectReferencesNeedingDecision(
-  references,
-  time,
-  excludedId,
-  frameRate,
+  references: SubjectReference[],
+  time: number,
+  excludedId: number | string | undefined,
+  frameRate: number | undefined,
 ) {
   const laterReferences = subjectReferencesAfter(
     references,
@@ -259,7 +266,7 @@ export function subjectReferencesNeedingDecision(
   );
   const finalReference = (references ?? [])
     .filter((reference) => Number.isFinite(reference.time))
-    .sort((left, right) => left.time - right.time)
+    .sort((left: { time: number; }, right: { time: number; }) => left.time - right.time)
     .at(-1);
   const selectedFrame = frameIndexAtTime(time, frameRate);
   const finalFrame = frameIndexAtTime(
@@ -280,8 +287,8 @@ export function subjectReferencesNeedingDecision(
 }
 
 export function subjectReferenceAtTime(
-  references,
-  time,
+  references: SubjectReference[],
+  time: number,
   {
     duration,
     frameRate,
@@ -289,7 +296,7 @@ export function subjectReferenceAtTime(
 ) {
   const candidates = (references ?? [])
     .filter((reference) => Number.isFinite(reference.time))
-    .sort((left, right) => left.time - right.time);
+    .sort((left: { time: number; }, right: { time: number; }) => left.time - right.time);
   const lastReference = candidates.at(-1);
   const selectedFrame = frameIndexAtTime(time, frameRate);
   const lastFrame = frameIndexAtTime(lastReference?.time, frameRate);
@@ -317,11 +324,11 @@ export function subjectReferenceAtTime(
 }
 
 export function trackingRestartRequiresDecision(
-  references,
-  currentTime,
-  frameRate,
+  references: SubjectReference[],
+  currentTime: number,
+  frameRate: number | undefined,
   tolerance = 0.005,
-  stoppedFrameTime = undefined,
+  stoppedFrameTime: number | undefined = undefined,
 ) {
   const currentFrame = frameIndexAtTime(currentTime, frameRate);
   const stoppedFrame = frameIndexAtTime(stoppedFrameTime, frameRate);
@@ -358,8 +365,8 @@ export function trackingRestartRequiresDecision(
 }
 
 export function isSceneJumpSuggestion(
-  suggestedTime,
-  selectionTime,
+  suggestedTime: number | undefined,
+  selectionTime: number,
   tolerance = 0.12,
 ) {
   return (
@@ -370,8 +377,8 @@ export function isSceneJumpSuggestion(
 }
 
 export function isDistantSubjectPosition(
-  previousBox,
-  nextBox,
+  previousBox: SubjectBox | undefined,
+  nextBox: SubjectBox | undefined,
   threshold = 0.1,
 ) {
   if (
@@ -390,11 +397,11 @@ export function isDistantSubjectPosition(
 }
 
 export function replaceSubjectReference(
-  references,
-  replacement,
+  references: SubjectReference[],
+  replacement: SubjectReference,
   deleteFollowing = false,
   tolerance = 0.005,
-  frameRate = undefined,
+  frameRate: number | undefined = undefined,
 ) {
   const replacementFrame = frameIndexAtTime(
     replacement?.time,

@@ -5,6 +5,11 @@ function timingDescription({
   snapToKeyframes,
   keyframes,
   keyframeAligned,
+}: {
+  vertical: boolean;
+  snapToKeyframes: boolean;
+  keyframes: number[];
+  keyframeAligned: boolean;
 }) {
   if (vertical) {
     return " · Vertical output";
@@ -29,6 +34,15 @@ export function describeSelection({
   keyframes,
   keepAudio,
   videoSpeed,
+}: {
+  start: number;
+  end: number;
+  duration: number;
+  vertical: boolean;
+  snapToKeyframes: boolean;
+  keyframes: number[];
+  keepAudio: boolean;
+  videoSpeed: number;
 }) {
   const length = end - start;
   const valid =

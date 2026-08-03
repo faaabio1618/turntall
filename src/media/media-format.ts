@@ -1,3 +1,34 @@
+export interface MediaProbeInfo {
+  readable?: boolean;
+  containerNames?: string[];
+  videoCodec?: string;
+  audioCodec?: string;
+  duration?: number;
+  width?: number;
+  height?: number;
+  frameRate?: number;
+  keyframes?: number[];
+  keyframeIndexReliable?: boolean;
+  verifiedKeyframePrefixLength?: number;
+}
+
+export interface OutputContainer {
+  extension: string;
+  label: string;
+  mimeType: string;
+  fallback?: boolean;
+}
+
+export interface EditorMediaInfo extends MediaProbeInfo {
+  readable: boolean;
+  canReencode?: boolean;
+  webCodecsEditing?: boolean;
+  streamingInput?: boolean;
+  outputContainer: OutputContainer;
+  invalidSeekIndex?: boolean;
+  missingDecoders?: string[];
+}
+
 const CONTAINER_DETAILS = {
   mp4: { extension: "mp4", label: "MP4", mimeType: "video/mp4" },
   mov: { extension: "mov", label: "QuickTime MOV", mimeType: "video/quicktime" },
@@ -18,7 +49,7 @@ const CONTAINER_DETAILS = {
 const WEBM_VIDEO_CODECS = new Set(["av1", "vp8", "vp9"]);
 const WEBM_AUDIO_CODECS = new Set(["opus", "vorbis"]);
 
-export function sourceExtension(filename) {
+export function sourceExtension(filename: string) {
   const match = filename.toLowerCase().match(/\.([a-z0-9]{1,5})$/);
   return match ? match[1] : "";
 }
@@ -35,8 +66,8 @@ export function ffmpegReencodeCommand(filename = "input.mp4") {
   return `ffmpeg -i "${sourceName}" -c:v libx264 -preset medium -crf 20 -pix_fmt yuv420p -force_key_frames "expr:gte(t,n_forced*2)" -c:a aac -b:a 192k -movflags +faststart "${outputName}"`;
 }
 
-export function parseDecoderList(logLines) {
-  const decoders = new Set();
+export function parseDecoderList(logLines: string[]) {
+  const decoders = new Set<string>();
 
   for (const line of logLines) {
     const match = line.match(/^\s*[VAS][A-Z.]{5}\s+([a-z0-9_]+)/i);
@@ -48,7 +79,7 @@ export function parseDecoderList(logLines) {
   return decoders;
 }
 
-function parseDuration(text) {
+function parseDuration(text: string) {
   const match = text.match(
     /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/,
   );
@@ -61,7 +92,7 @@ function parseDuration(text) {
   );
 }
 
-export function parseMediaProbeLogs(logLines) {
+export function parseMediaProbeLogs(logLines: string[]): MediaProbeInfo {
   const text = logLines.join("\n");
   const inputMatch = text.match(/Input #0,\s*(.+?),\s*from\s+/);
   const videoMatch = text.match(/Stream #0:[^\n]*Video:\s*([a-z0-9_]+)/i);
@@ -75,7 +106,7 @@ export function parseMediaProbeLogs(logLines) {
 
   return {
     containerNames: inputMatch
-      ? inputMatch[1].split(",").map((name) => name.trim().toLowerCase())
+      ? inputMatch[1].split(",").map((name: string) => name.trim().toLowerCase())
       : [],
     videoCodec: videoMatch?.[1]?.toLowerCase(),
     audioCodec: audioMatch?.[1]?.toLowerCase(),
@@ -88,15 +119,18 @@ export function parseMediaProbeLogs(logLines) {
   };
 }
 
-function isWebMCompatible(videoCodec, audioCodec) {
+function isWebMCompatible(videoCodec?: string, audioCodec?: string) {
   return (
     WEBM_VIDEO_CODECS.has(videoCodec) &&
     (!audioCodec || WEBM_AUDIO_CODECS.has(audioCodec))
   );
 }
 
-export function selectStreamCopyContainer(media, filename) {
-  const formats = new Set(media.containerNames);
+export function selectStreamCopyContainer(
+  media: MediaProbeInfo,
+  filename: string,
+): OutputContainer {
+  const formats = new Set(media.containerNames ?? []);
   const extension = sourceExtension(filename);
 
   if (
@@ -118,14 +152,15 @@ export function selectStreamCopyContainer(media, filename) {
     return CONTAINER_DETAILS[useWebM ? "webm" : "mkv"];
   }
 
-  for (const format of [
+  const fallbackFormats = [
     "avi",
     "mpegts",
     "mpeg",
     "ogg",
     "flv",
     "asf",
-  ]) {
+  ] as const;
+  for (const format of fallbackFormats) {
     if (formats.has(format)) {
       return CONTAINER_DETAILS[format];
     }
@@ -137,7 +172,10 @@ export function selectStreamCopyContainer(media, filename) {
   };
 }
 
-export function decoderSupport(media, decoderNames) {
+export function decoderSupport(
+  media: MediaProbeInfo,
+  decoderNames: ReadonlySet<string>,
+) {
   if (!decoderNames.size) {
     return { canReencode: true, missingDecoders: [] };
   }
@@ -158,6 +196,11 @@ export function mediaCompatibilityWarning({
   canReencode,
   browserPreviewReadable,
   invalidSeekIndex = false,
+}: {
+  readable: boolean;
+  canReencode: boolean;
+  browserPreviewReadable?: boolean;
+  invalidSeekIndex?: boolean;
 }) {
   if (invalidSeekIndex) {
     return "This video has invalid seek data, so browsers cannot move to the correct frame. Re-export or re-encode it, then load the new file.";
@@ -182,7 +225,7 @@ export function mediaCompatibilityWarning({
 }
 
 export function processingFailureMessage(
-  error,
+  error: unknown,
   { browserEncoding = false, vertical = false } = {},
 ) {
   const details =

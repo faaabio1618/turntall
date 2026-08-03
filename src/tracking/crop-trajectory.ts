@@ -1,4 +1,9 @@
 import { clamp } from "../media/video-utils.ts";
+import type {
+  CropPoint,
+  CropSize,
+  SubjectReference,
+} from "./types.ts";
 
 const TIME_EPSILON = 1e-6;
 const PYTRACKER_GAUSSIAN_SIGMA = 5;
@@ -8,9 +13,9 @@ const MAXIMUM_CROP_SPEED_WIDTHS_PER_SECOND = 0.35;
 export const CROP_STABILIZATION_WINDOW_SECONDS = 0.8;
 
 function centeredCropPosition(
-  sourceWidth,
-  sourceHeight,
-  cropSize,
+  sourceWidth: number,
+  sourceHeight: number,
+  cropSize: { width: number; height: number; },
 ) {
   return {
     left: (sourceWidth - cropSize.width) / 2,
@@ -19,10 +24,10 @@ function centeredCropPosition(
 }
 
 export function subjectCropPosition(
-  reference,
-  sourceWidth,
-  sourceHeight,
-  cropSize,
+  reference: SubjectReference,
+  sourceWidth: number,
+  sourceHeight: number,
+  cropSize: { width: number; height: number; },
 ) {
   if (!reference?.box) {
     return centeredCropPosition(
@@ -57,7 +62,7 @@ export function subjectCropPosition(
   };
 }
 
-function reflectedIndex(index, length) {
+function reflectedIndex(index: number, length: number) {
   if (length <= 1) {
     return 0;
   }
@@ -71,7 +76,7 @@ function reflectedIndex(index, length) {
   return reflected;
 }
 
-function gaussianFilter1d(values, sigma) {
+function gaussianFilter1d(values: number[], sigma: number) {
   if (values.length < 2 || sigma <= 0) {
     return [...values];
   }
@@ -80,7 +85,7 @@ function gaussianFilter1d(values, sigma) {
     1,
     Math.floor(PYTRACKER_GAUSSIAN_TRUNCATE * sigma + 0.5),
   );
-  const weights = [];
+  const weights: number[] = [];
   let weightTotal = 0;
   for (let offset = -radius; offset <= radius; offset += 1) {
     const weight = Math.exp(-(offset ** 2) / (2 * sigma ** 2));
@@ -98,11 +103,11 @@ function gaussianFilter1d(values, sigma) {
   );
 }
 
-function gaussianAutomaticLefts(points, sigma) {
+function gaussianAutomaticLefts(points: CropPoint[], sigma: number) {
   const smoothed = points.map((point) => point.left);
   let segmentStart = 0;
 
-  const smoothSegment = (segmentEnd) => {
+  const smoothSegment = (segmentEnd: number) => {
     const values = points
       .slice(segmentStart, segmentEnd)
       .map((point) => point.left);
@@ -125,7 +130,7 @@ function gaussianAutomaticLefts(points, sigma) {
   return smoothed;
 }
 
-function gaussianAutomaticLeftsByTime(points, windowSeconds) {
+function gaussianAutomaticLeftsByTime(points: CropPoint[], windowSeconds: number) {
   const smoothed = points.map((point) => point.left);
   const sigmaSeconds = windowSeconds / PYTRACKER_GAUSSIAN_TRUNCATE;
   if (points.length < 2 || sigmaSeconds <= 0) {
@@ -133,7 +138,7 @@ function gaussianAutomaticLeftsByTime(points, windowSeconds) {
   }
 
   let segmentStart = 0;
-  const smoothSegment = (segmentEnd) => {
+  const smoothSegment = (segmentEnd: number) => {
     const segment = points.slice(segmentStart, segmentEnd);
     for (let localIndex = 0; localIndex < segment.length; localIndex += 1) {
       const point = segment[localIndex];
@@ -178,14 +183,14 @@ function gaussianAutomaticLeftsByTime(points, windowSeconds) {
   return smoothed;
 }
 
-function cropPointIsAdjustable(point) {
+function cropPointIsAdjustable(point: CropPoint) {
   return point.automatic && !point.cropLocked && !point.jump;
 }
 
 function subjectVisibleCropRange(
-  reference,
-  sourceWidth,
-  cropWidth,
+  reference: SubjectReference,
+  sourceWidth: number,
+  cropWidth: number,
 ) {
   if (!reference?.box || sourceWidth <= 0 || cropWidth <= 0) {
     return undefined;
@@ -218,7 +223,7 @@ function subjectVisibleCropRange(
   return { minimumLeft: centeredLeft, maximumLeft: centeredLeft };
 }
 
-function limitAutomaticCropSpeed(points, maximumSpeed) {
+function limitAutomaticCropSpeed(points: CropPoint[], maximumSpeed: number) {
   if (
     points.length < 2 ||
     !Number.isFinite(maximumSpeed) ||
@@ -228,7 +233,7 @@ function limitAutomaticCropSpeed(points, maximumSpeed) {
   }
 
   const limited = points.map((point) => ({ ...point }));
-  const clampAutomaticPoint = (index, neighborIndex) => {
+  const clampAutomaticPoint = (index: number, neighborIndex: number) => {
     const point = limited[index];
     const neighbor = limited[neighborIndex];
     const crossesJump =
@@ -270,7 +275,10 @@ function limitAutomaticCropSpeed(points, maximumSpeed) {
   return limited;
 }
 
-export function cropPositionAtTime(points, time) {
+export function cropPositionAtTime(
+  points: CropPoint[],
+  time: number,
+): Pick<CropPoint, "left" | "top"> | undefined {
   if (!points.length) {
     return undefined;
   }
@@ -302,11 +310,11 @@ export function cropPositionAtTime(points, time) {
 }
 
 export function smoothAutomaticCropPositions(
-  points,
+  points: CropPoint[],
   sigma = PYTRACKER_GAUSSIAN_SIGMA,
   movementThreshold = PYTRACKER_MOVEMENT_THRESHOLD_PX,
   maximumSpeed = Number.POSITIVE_INFINITY,
-  stabilizationWindowSeconds = undefined,
+  stabilizationWindowSeconds: number | undefined = undefined,
 ) {
   if (points.length < 2) {
     return points.map((point) => ({ ...point }));
@@ -371,7 +379,7 @@ export function smoothAutomaticCropPositions(
 }
 
 export function stabilizeTrackedReferences(
-  references,
+  references: SubjectReference[],
   {
     sourceWidth,
     sourceHeight,
@@ -381,9 +389,18 @@ export function stabilizeTrackedReferences(
     maximumSpeed = undefined,
     stabilizationWindowSeconds = CROP_STABILIZATION_WINDOW_SECONDS,
     fixedBeforeTime = undefined,
+  }: {
+    sourceWidth: number;
+    sourceHeight: number;
+    cropSize: CropSize;
+    sigma?: number;
+    movementThreshold?: number;
+    maximumSpeed?: number;
+    stabilizationWindowSeconds?: number;
+    fixedBeforeTime?: number;
   },
 ) {
-  const positioned = references.map((reference, sampleIndex) => {
+  const positioned: CropPoint[] = references.map((reference, sampleIndex) => {
     const cropLocked =
       reference.automatic &&
       Number.isFinite(reference.cropLeft) &&
@@ -431,15 +448,21 @@ export function stabilizeTrackedReferences(
 }
 
 export function createCropTrajectory(
-  references,
+  references: SubjectReference[],
   {
     start,
     end,
     sourceWidth,
     sourceHeight,
     cropSize,
+  }: {
+    start: number;
+    end: number;
+    sourceWidth: number;
+    sourceHeight: number;
+    cropSize: CropSize;
   },
-) {
+): CropPoint[] {
   const positionedReferences = references
       .filter(
         (reference) =>
@@ -456,7 +479,7 @@ export function createCropTrajectory(
           cropSize,
         ),
       }))
-      .sort((left, right) => left.time - right.time)
+      .sort((left: { time: number; }, right: { time: number; }) => left.time - right.time)
       .filter(
         (point, index, points) =>
           index === points.length - 1 ||
@@ -481,11 +504,11 @@ export function createCropTrajectory(
   const startPosition = cropPositionAtTime(
     positionedReferences,
     start,
-  );
+  )!;
   const endPosition = cropPositionAtTime(
     positionedReferences,
     end,
-  );
+  )!;
   const interior = positionedReferences
     .filter(
       (point) =>
@@ -507,9 +530,9 @@ export function createCropTrajectory(
 }
 
 export function cropRectangleAtTime(
-  trajectory,
-  time,
-  cropSize,
+  trajectory: CropPoint[],
+  time: number,
+  cropSize: CropSize,
 ) {
   const position = cropPositionAtTime(trajectory, time) ?? {
     left: 0,
@@ -524,11 +547,14 @@ export function cropRectangleAtTime(
   };
 }
 
-function ffmpegNumber(value) {
+function ffmpegNumber(value: number) {
   return String(Number(value.toFixed(3)));
 }
 
-function ffmpegPositionExpression(trajectory, property) {
+function ffmpegPositionExpression(
+  trajectory: CropPoint[],
+  property: "left" | "top",
+) {
   if (trajectory.length === 1) {
     return ffmpegNumber(trajectory[0][property]);
   }
@@ -558,7 +584,10 @@ function ffmpegPositionExpression(trajectory, property) {
   return expression;
 }
 
-export function createFFmpegCropFilter(cropSize, trajectory) {
+export function createFFmpegCropFilter(
+  cropSize: CropSize,
+  trajectory: CropPoint[],
+) {
   return `crop=${cropSize.width}:${cropSize.height}:${ffmpegPositionExpression(
     trajectory,
     "left",
