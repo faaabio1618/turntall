@@ -69,6 +69,15 @@ describe("time and size formatting", () => {
     expect(presentedFrameTime(5.02, 5, 30)).toBe(5);
   });
 
+  it("rejects decoded metadata left over from the preceding frame", () => {
+    const currentTime = (151 + 0.25) / 30;
+    const precedingFrameTime = 150 / 30;
+
+    expect(
+      presentedFrameTime(currentTime, precedingFrameTime, 30),
+    ).toBe(currentTime);
+  });
+
   it("ignores stale decoded-frame metadata after a distant seek", () => {
     expect(presentedFrameTime(8, 5, 30)).toBe(8);
   });

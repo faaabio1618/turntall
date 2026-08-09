@@ -98,11 +98,16 @@ export function presentedFrameTime(
     return currentTime;
   }
 
-  const frameDuration =
-    Number.isFinite(frameRate) && frameRate > 0
-      ? 1 / frameRate
-      : 1 / 30;
-  return Math.abs(mediaTime - currentTime) <= frameDuration * 1.5
+  if (Number.isFinite(frameRate) && frameRate > 0) {
+    const presentedFrame = frameIndexAtTime(mediaTime, frameRate);
+    const playheadFrame = Math.max(
+      0,
+      Math.floor(currentTime * frameRate + Number.EPSILON),
+    );
+    return presentedFrame === playheadFrame ? mediaTime : currentTime;
+  }
+
+  return Math.abs(mediaTime - currentTime) < 1 / 30
     ? mediaTime
     : currentTime;
 }

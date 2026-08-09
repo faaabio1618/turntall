@@ -4055,6 +4055,9 @@ elements.preview.addEventListener("timeupdate", () => {
   renderTrackingConfidencePlayhead();
 });
 elements.preview.addEventListener("seeking", () => {
+  // A callback queued for the old frame can otherwise arrive during this
+  // seek and make a correction attach to the immediately preceding frame.
+  stopCropPreviewAnimation();
   previewPresentedTime = undefined;
   scheduleCropPreviewFrame(true);
 });
