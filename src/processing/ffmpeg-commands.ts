@@ -81,6 +81,11 @@ export function createCutArgs({
 
   const videoFilters = [];
   if (vertical) {
+    // Browser previews work in square-pixel display coordinates (for example,
+    // Chrome exposes a 1440x1080, SAR 4:3 source as 1920x1080). Normalize the
+    // decoded frame to that same coordinate system before applying crop
+    // positions calculated by the preview and tracker.
+    videoFilters.push("scale=trunc(iw*sar/2)*2:ih", "setsar=1");
     videoFilters.push(
       cropTrajectory
         ? createFFmpegCropFilter(
@@ -89,10 +94,6 @@ export function createCutArgs({
           )
         : `crop=${cropSize.width}:${cropSize.height}:(iw-${cropSize.width})/2:(ih-${cropSize.height})/2`,
     );
-    // Canvas previews use square pixels. An anamorphic source can otherwise
-    // pass its sample aspect ratio through the crop and make the downloaded
-    // video display wider than 9:16.
-    videoFilters.push("setsar=1");
   }
   if (speedChanged) {
     videoFilters.push(`setpts=(PTS-STARTPTS)/${playbackRate}`);
