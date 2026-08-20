@@ -93,6 +93,7 @@ describe("FFmpeg cut commands", () => {
     expect(args[args.indexOf("-vf") + 1]).toContain(
       "crop=810:1440:(iw-810)/2:(ih-1440)/2",
     );
+    expect(args[args.indexOf("-vf") + 1]).toContain("setsar=1");
     expect(args).toContain("libx264");
     expect(args).toContain("yuv420p");
     expect(args).toContain("-threads");
@@ -115,6 +116,7 @@ describe("FFmpeg cut commands", () => {
 
     expect(filter).toContain("setpts=PTS-STARTPTS");
     expect(filter).toContain("crop=810:1440:");
+    expect(filter).toContain("setsar=1");
     expect(filter).toContain("if(lt(t\\,2)");
     expect(filter).not.toContain("(iw-810)/2");
     expect(filter.indexOf("crop=")).toBeLessThan(

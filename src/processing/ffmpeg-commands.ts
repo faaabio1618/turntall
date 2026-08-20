@@ -89,6 +89,10 @@ export function createCutArgs({
           )
         : `crop=${cropSize.width}:${cropSize.height}:(iw-${cropSize.width})/2:(ih-${cropSize.height})/2`,
     );
+    // Canvas previews use square pixels. An anamorphic source can otherwise
+    // pass its sample aspect ratio through the crop and make the downloaded
+    // video display wider than 9:16.
+    videoFilters.push("setsar=1");
   }
   if (speedChanged) {
     videoFilters.push(`setpts=(PTS-STARTPTS)/${playbackRate}`);
