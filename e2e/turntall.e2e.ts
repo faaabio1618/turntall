@@ -996,10 +996,17 @@ test("creates a short local output and manages its filename", async ({
   await page.locator("#end-time").fill("1");
   await page.locator("#end-time").press("Tab");
   await expect(page.locator("#cut-button")).toBeEnabled();
+  const automaticDownloadPromise = page.waitForEvent("download", {
+    timeout: 60_000,
+  });
   await page.locator("#cut-button").click();
 
   const download = page.locator("#download-link");
   await expect(download).toBeVisible({ timeout: 60_000 });
+  const automaticDownload = await automaticDownloadPromise;
+  expect(automaticDownload.suggestedFilename()).toBe(
+    "e2e-sample-cut.webm",
+  );
   await expect(page.locator("#status")).toContainText(
     "Finished locally",
   );

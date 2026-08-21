@@ -3878,6 +3878,7 @@ async function cutVideo() {
         ? `Finished locally. Your ${formatTime(segmentDuration / videoSpeed)} vertical clip is ready at ${cropSize.width} × ${cropSize.height}.`
         : `Finished locally. Your ${formatTime(segmentDuration / videoSpeed)} clip is ready.`,
     );
+    elements.downloadLink.click();
   } catch (error) {
     if (cancelRequested) {
       stopProcessingSteps("cancelled");
