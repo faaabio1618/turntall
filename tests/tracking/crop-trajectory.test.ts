@@ -4,6 +4,7 @@ import {
   createFFmpegCropFilter,
   cropPositionAtTime,
   cropRectangleAtTime,
+  fitCropTrajectoryForFFmpeg,
   smoothAutomaticCropPositions,
   stabilizeTrackedReferences,
   subjectCropPosition,
@@ -313,6 +314,103 @@ describe("crop trajectories", () => {
       cropLeft: 120,
       automatic: true,
     });
+  });
+
+  it("finds the minimum stronger stabilization for FFmpeg", () => {
+    const samples = Array.from({ length: 42 }, (_, index) => ({
+      time: index,
+      box: {
+        x: index % 2 === 0 ? 0.44 : 0.46,
+        y: 0.2,
+        width: 0.1,
+        height: 0.4,
+      },
+      automatic: index > 0,
+    }));
+
+    const fitted = fitCropTrajectoryForFFmpeg(samples, {
+      start: 0,
+      end: 41,
+      ...dimensions,
+      maximumPoints: 20,
+    });
+
+    expect(fitted).toBeDefined();
+    expect(fitted.originalPointCount).toBeGreaterThan(20);
+    expect(fitted.trajectory.length).toBeLessThanOrEqual(20);
+    expect(fitted.stabilizationTolerance).toBeGreaterThan(24.4);
+    expect(fitted.stabilizationTolerance).toBeLessThan(24.6);
+    expect(fitted.trajectory[0].time).toBe(0);
+    expect(fitted.trajectory[0].left).toBeCloseTo(425.2, 8);
+  });
+
+  it("collapses a smooth frame-by-frame path without losing visibility", () => {
+    const samples = Array.from({ length: 120 }, (_, index) => ({
+      time: index / 24,
+      box: {
+        x: 0.1 + (0.6 * index) / 119,
+        y: 0.2,
+        width: 0.1,
+        height: 0.4,
+      },
+      automatic: index > 0,
+    }));
+
+    const fitted = fitCropTrajectoryForFFmpeg(samples, {
+      start: 0,
+      end: 119 / 24,
+      ...dimensions,
+      maximumPoints: 10,
+    });
+
+    expect(fitted).toBeDefined();
+    expect(fitted.originalPointCount).toBeGreaterThan(100);
+    expect(fitted.trajectory.length).toBeLessThanOrEqual(10);
+    expect(fitted.stabilizationTolerance).toBeLessThan(0.01);
+  });
+
+  it("does not simplify required manual crop positions", () => {
+    const samples = Array.from({ length: 12 }, (_, index) => ({
+      time: index,
+      box: {
+        x: index % 2 === 0 ? 0.1 : 0.8,
+        y: 0.2,
+        width: 0.1,
+        height: 0.4,
+      },
+      automatic: false,
+    }));
+
+    expect(
+      fitCropTrajectoryForFFmpeg(samples, {
+        start: 0,
+        end: 11,
+        ...dimensions,
+        maximumPoints: 8,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("does not simplify automatic positions that keep the subject visible", () => {
+    const samples = Array.from({ length: 12 }, (_, index) => ({
+      time: index,
+      box: {
+        x: index % 2 === 0 ? 0.05 : 0.85,
+        y: 0.2,
+        width: 0.1,
+        height: 0.4,
+      },
+      automatic: index > 0,
+    }));
+
+    expect(
+      fitCropTrajectoryForFFmpeg(samples, {
+        start: 0,
+        end: 11,
+        ...dimensions,
+        maximumPoints: 8,
+      }),
+    ).toBeUndefined();
   });
 
   it("creates clip-relative endpoints and interior reference frames", () => {

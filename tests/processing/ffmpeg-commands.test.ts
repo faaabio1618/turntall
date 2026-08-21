@@ -133,6 +133,32 @@ describe("FFmpeg cut commands", () => {
     );
   });
 
+  it("processes an exact long crop path in joined safe sections", () => {
+    const cropTrajectory = Array.from({ length: 200 }, (_, index) => ({
+      time: index / 24,
+      left: index,
+      top: 0,
+      automatic: true,
+    }));
+    const args = createCutArgs({
+      ...baseCut,
+      vertical: true,
+      accurate: true,
+      cropTrajectory,
+      segmentCropTrajectory: true,
+    });
+    const graph = args[args.indexOf("-filter_complex") + 1];
+
+    expect(args).not.toContain("-vf");
+    expect(args[args.indexOf("-map") + 1]).toBe("[crop-output]");
+    expect(graph).toContain("split=3");
+    expect(graph).toContain("concat=n=3:v=1:a=0[crop-output]");
+    expect(graph.match(/crop=810:1440:/g)).toHaveLength(3);
+    expect(graph).toContain("trim=start=0:end=3.958");
+    expect(graph).toContain("trim=start=3.958:end=7.917");
+    expect(graph).toContain("trim=start=7.917:end=8.292");
+  });
+
   it("removes the audio track when silent output is selected", () => {
     for (const mode of [
       { vertical: false, accurate: false },

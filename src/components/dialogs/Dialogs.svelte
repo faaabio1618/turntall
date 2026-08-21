@@ -99,3 +99,34 @@
         </div>
       </form>
     </dialog>
+
+    <dialog
+      id="crop-stabilization-dialog"
+      aria-labelledby="crop-stabilization-dialog-title"
+    >
+      <form method="dialog" class="confirmation-dialog">
+        <h2 id="crop-stabilization-dialog-title">
+          This crop has many camera movements
+        </h2>
+        <p id="crop-stabilization-dialog-copy">
+          Choose smoother stabilization, or keep the exact tracking. Keeping
+          exact tracking can be slower.
+        </p>
+        <div class="confirmation-dialog-actions">
+          <button value="cancel" type="submit" class="secondary">
+            Cancel
+          </button>
+          <button
+            id="exact-crop-cut"
+            value="exact"
+            type="submit"
+            class="secondary"
+          >
+            Keep exact tracking (slower)
+          </button>
+          <button id="stabilized-crop-cut" value="stabilize" type="submit">
+            Smoother stabilization
+          </button>
+        </div>
+      </form>
+    </dialog>

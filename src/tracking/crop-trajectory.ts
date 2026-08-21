@@ -11,6 +11,7 @@ const PYTRACKER_GAUSSIAN_TRUNCATE = 4;
 const PYTRACKER_MOVEMENT_THRESHOLD_PX = 15;
 const MAXIMUM_CROP_SPEED_WIDTHS_PER_SECOND = 0.35;
 export const CROP_STABILIZATION_WINDOW_SECONDS = 0.8;
+export const MAX_FFMPEG_CROP_TRAJECTORY_POINTS = 96;
 
 function centeredCropPosition(
   sourceWidth: number,
@@ -527,6 +528,172 @@ export function createCropTrajectory(
       ? [{ time: duration, jump: false, ...endPosition }]
       : []),
   ];
+}
+
+export function fitCropTrajectoryForFFmpeg(
+  references: SubjectReference[],
+  {
+    start,
+    end,
+    sourceWidth,
+    sourceHeight,
+    cropSize,
+    maximumPoints = MAX_FFMPEG_CROP_TRAJECTORY_POINTS,
+  }: {
+    start: number;
+    end: number;
+    sourceWidth: number;
+    sourceHeight: number;
+    cropSize: CropSize;
+    maximumPoints?: number;
+  },
+) {
+  const trajectoryOptions = {
+    start,
+    end,
+    sourceWidth,
+    sourceHeight,
+    cropSize,
+  };
+  const originalTrajectory = createCropTrajectory(
+    references,
+    trajectoryOptions,
+  );
+  if (originalTrajectory.length <= maximumPoints) {
+    return {
+      trajectory: originalTrajectory,
+      stabilizationTolerance: 0,
+      originalPointCount: originalTrajectory.length,
+    };
+  }
+
+  const visibilityConstraints = references
+    .filter(
+      (reference) =>
+        reference.time >= start - TIME_EPSILON &&
+        reference.time <= end + TIME_EPSILON,
+    )
+    .map((reference) => ({
+      time: clamp(reference.time - start, 0, end - start),
+      ...subjectVisibleCropRange(
+        reference,
+        sourceWidth,
+        cropSize.width,
+      ),
+    }))
+    .filter(
+      (constraint) =>
+        Number.isFinite(constraint.minimumLeft) &&
+        Number.isFinite(constraint.maximumLeft),
+    );
+
+  const simplifyAt = (stabilizationTolerance: number) => {
+    const requiredTimes = new Set<number>();
+    let trajectory: CropPoint[] = [];
+
+    for (let pass = 0; pass <= originalTrajectory.length; pass += 1) {
+      const keep = new Set<number>([0, originalTrajectory.length - 1]);
+      for (let index = 1; index < originalTrajectory.length - 1; index += 1) {
+        const point = originalTrajectory[index];
+        if (
+          point.jump ||
+          !point.automatic ||
+          requiredTimes.has(point.time)
+        ) {
+          keep.add(index);
+        }
+      }
+
+      const anchors = [...keep].sort((left, right) => left - right);
+      for (let index = 1; index < anchors.length; index += 1) {
+        const pendingSpans = [[anchors[index - 1], anchors[index]]];
+        while (pendingSpans.length) {
+          const [firstIndex, lastIndex] = pendingSpans.pop();
+          const first = originalTrajectory[firstIndex];
+          const last = originalTrajectory[lastIndex];
+          let furthestIndex = -1;
+          let furthestDistance = stabilizationTolerance;
+          for (
+            let pointIndex = firstIndex + 1;
+            pointIndex < lastIndex;
+            pointIndex += 1
+          ) {
+            const point = originalTrajectory[pointIndex];
+            const span = last.time - first.time;
+            const progress = span <= TIME_EPSILON
+              ? 1
+              : clamp((point.time - first.time) / span, 0, 1);
+            const expectedLeft =
+              first.left + (last.left - first.left) * progress;
+            const expectedTop =
+              first.top + (last.top - first.top) * progress;
+            const distance = Math.hypot(
+              point.left - expectedLeft,
+              point.top - expectedTop,
+            );
+            if (distance > furthestDistance) {
+              furthestDistance = distance;
+              furthestIndex = pointIndex;
+            }
+          }
+          if (furthestIndex >= 0) {
+            keep.add(furthestIndex);
+            pendingSpans.push(
+              [firstIndex, furthestIndex],
+              [furthestIndex, lastIndex],
+            );
+          }
+        }
+      }
+      trajectory = [...keep]
+        .sort((left, right) => left - right)
+        .map((index) => originalTrajectory[index]);
+
+      const violations = visibilityConstraints.filter((constraint) => {
+        const position = cropPositionAtTime(trajectory, constraint.time);
+        return (
+          position &&
+          (position.left < constraint.minimumLeft - TIME_EPSILON ||
+            position.left > constraint.maximumLeft + TIME_EPSILON)
+        );
+      });
+      const previousRequiredCount = requiredTimes.size;
+      for (const violation of violations) {
+        requiredTimes.add(violation.time);
+      }
+      if (requiredTimes.size === previousRequiredCount) {
+        break;
+      }
+    }
+
+    return {
+      trajectory,
+      stabilizationTolerance,
+      originalPointCount: originalTrajectory.length,
+    };
+  };
+
+  let lowerTolerance = 0;
+  let upperTolerance = sourceWidth;
+  let bestFit = simplifyAt(upperTolerance);
+  if (bestFit.trajectory.length > maximumPoints) {
+    return undefined;
+  }
+
+  // Binary search finds the smallest deviation from the existing stabilized
+  // crop path that stays safely below FFmpeg's expression nesting limit.
+  for (let iteration = 0; iteration < 18; iteration += 1) {
+    const tolerance = (lowerTolerance + upperTolerance) / 2;
+    const candidate = simplifyAt(tolerance);
+    if (candidate.trajectory.length <= maximumPoints) {
+      upperTolerance = tolerance;
+      bestFit = candidate;
+    } else {
+      lowerTolerance = tolerance;
+    }
+  }
+
+  return bestFit;
 }
 
 export function cropRectangleAtTime(

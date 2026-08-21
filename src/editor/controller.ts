@@ -9,6 +9,8 @@ import {
   CROP_STABILIZATION_WINDOW_SECONDS,
   createCropTrajectory,
   cropRectangleAtTime,
+  fitCropTrajectoryForFFmpeg,
+  MAX_FFMPEG_CROP_TRAJECTORY_POINTS,
   stabilizeTrackedReferences,
 } from "../tracking/crop-trajectory.ts";
 import {
@@ -2965,6 +2967,42 @@ function setStatus(
   }
 }
 
+function requestCropComplexityChoice({
+  fittedPointCount,
+  stabilizationTolerance,
+}: {
+  fittedPointCount?: number;
+  stabilizationTolerance?: number;
+}) {
+  const canStabilize =
+    Number.isFinite(fittedPointCount) &&
+    Number.isFinite(stabilizationTolerance);
+  elements.stabilizedCropCut.hidden = !canStabilize;
+  if (!canStabilize) {
+    elements.cropStabilizationDialogCopy.textContent =
+      "This crop needs exact tracking to keep the subject visible. Exact tracking can be slower.";
+  } else {
+    elements.cropStabilizationDialogCopy.textContent =
+      "Choose smoother stabilization, or keep the exact tracking. Keeping exact tracking can be slower.";
+  }
+  elements.cropStabilizationDialog.returnValue = "";
+  return new Promise<"stabilize" | "exact" | undefined>((resolve) => {
+    elements.cropStabilizationDialog.addEventListener(
+      "close",
+      () => {
+        const choice = elements.cropStabilizationDialog.returnValue;
+        resolve(
+          choice === "stabilize" || choice === "exact"
+            ? choice
+            : undefined,
+        );
+      },
+      { once: true },
+    );
+    elements.cropStabilizationDialog.showModal();
+  });
+}
+
 function startProcessingEstimate(
   message: string,
   processLabel: string,
@@ -3690,11 +3728,6 @@ async function cutVideo() {
     return;
   }
 
-  resetDownload();
-  cancelRequested = false;
-  setBusy(true);
-  elements.progress.value = 0;
-
   const { start, end } = selection();
   const segmentDuration = end - start;
   const revision = sourceRevision;
@@ -3715,7 +3748,8 @@ async function cutVideo() {
     : mediaInfo.outputContainer;
   const outputName = `cut-${revision}.${outputContainer.extension}`;
   const cropSize = centeredVerticalSize(sourceWidth, sourceHeight);
-  const cropTrajectory = vertical
+  let segmentCropTrajectory = false;
+  let cropTrajectory = vertical
     ? createCropTrajectory(subjectReferences, {
         start,
         end,
@@ -3725,6 +3759,42 @@ async function cutVideo() {
       })
     : undefined;
   const subjectGuided = vertical && subjectReferences.length > 0;
+  if (
+    subjectGuided &&
+    !useWebCodecs &&
+    cropTrajectory &&
+    cropTrajectory.length > MAX_FFMPEG_CROP_TRAJECTORY_POINTS
+  ) {
+    const fittedCrop = fitCropTrajectoryForFFmpeg(
+      subjectReferences,
+      {
+        start,
+        end,
+        sourceWidth,
+        sourceHeight,
+        cropSize,
+      },
+    );
+    const choice = await requestCropComplexityChoice({
+      fittedPointCount: fittedCrop?.trajectory.length,
+      stabilizationTolerance: fittedCrop?.stabilizationTolerance,
+    });
+    if (!choice) {
+      return;
+    }
+
+    if (choice === "stabilize" && fittedCrop) {
+      cropTrajectory = fittedCrop.trajectory;
+    } else {
+      segmentCropTrajectory = true;
+    }
+  }
+
+  resetDownload();
+  cancelRequested = false;
+  setBusy(true);
+  elements.progress.value = 0;
+
   const operationLogs: string[] = [];
   const processingMessage = vertical
     ? subjectGuided
@@ -3831,6 +3901,7 @@ async function cutVideo() {
           accurate: exactCut,
           keepAudio,
           playbackRate: videoSpeed,
+          segmentCropTrajectory,
         }),
       );
 
