@@ -58,7 +58,6 @@ function agentReadyRoutesPlugin(): Plugin {
     name: "agent-ready-routes",
     configureServer(server) {
       server.middlewares.use(middleware(true));
-      return () => server.middlewares.use(notFound);
     },
     configurePreviewServer(server) {
       server.middlewares.use(middleware(false));

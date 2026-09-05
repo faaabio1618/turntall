@@ -68,7 +68,7 @@ test("all public files and discovery links resolve with correct metadata", async
     if (file.name.endsWith(".txt")) expect(response.headers()["content-type"]).toContain("text/plain");
   }
   const llms = await (await request.get("/llms.txt")).text();
-  expect(llms).toMatch(/^# turntall\.com\n\n> /);
+  expect(llms).toMatch(/^# turntall\.com\r?\n\r?\n> /);
   expect(llms).toContain("When to use");
   for (const match of llms.matchAll(/\]\((https:\/\/turntall\.com[^)]+)\)/g)) {
     expect((await request.get(new URL(match[1]).pathname)).status()).toBe(200);
