@@ -15,27 +15,42 @@
       href="/llms.txt"
       title="turntall.com product information for AI assistants"
     />
+    <link
+      rel="alternate"
+      type="text/markdown"
+      href="/index.md"
+      title="Markdown version of the turntall.com homepage"
+    />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://turntall.com/" />
+    <meta property="og:site_name" content="turntall.com" />
     <meta
       property="og:title"
-      content="Free Horizontal to Vertical Video Converter · No Watermark"
+      content="turntall.com · Free Horizontal to Vertical Video Converter"
     />
     <meta
       property="og:description"
       content="Create a 9:16 vertical video, keep a moving subject in frame, and export without uploading your video or adding a watermark."
     />
-    <meta name="twitter:card" content="summary" />
+    <meta property="og:image" content="https://turntall.com/og-image.png" />
+    <meta
+      property="og:image:alt"
+      content="The turntall.com private browser video editor"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta
       name="twitter:title"
-      content="Free Horizontal to Vertical Video Converter · No Watermark"
+      content="turntall.com · Free Horizontal to Vertical Video Converter"
     />
     <meta
       name="twitter:description"
       content="Reframe horizontal videos to 9:16 locally in Chrome. Free, private, and no watermark."
     />
+    <meta name="twitter:image" content="https://turntall.com/og-image.png" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <title>Free Horizontal to Vertical Video Converter · No Watermark</title>
+    <link rel="stylesheet" href="/agent-pages.css" />
+    <title>turntall.com · Free Horizontal to Vertical Video Converter</title>
+    <link rel="describedby" href="/llms.txt" />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -63,7 +78,52 @@
     </script>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <main class="agent-fallback">
+        <header>
+          <p class="agent-eyebrow">Local video editor</p>
+          <h1>turntall.com — private horizontal-to-vertical video editor</h1>
+          <p>
+            Convert landscape footage into a 9:16 vertical video without
+            uploading the source, creating an account, or adding a watermark.
+            turntall.com processes the video locally on your device in desktop
+            Google Chrome.
+          </p>
+        </header>
+        <section>
+          <h2>Trim, reframe, and follow a moving subject</h2>
+          <p>
+            Choose exact start and end frames, preview the selected segment,
+            keep or remove audio, and change output speed from 0.5× to 3×. A
+            centered vertical crop is available for simple conversions. When a
+            person or object moves, draw a box around the subject and the local
+            tracker keeps that subject inside the portrait frame. You can add
+            corrections after large movements or scene changes before export.
+          </p>
+        </section>
+        <section>
+          <h2>Designed for private, local video editing</h2>
+          <p>
+            The selected video stays in the browser. Analysis, crop planning,
+            preview, encoding, and download happen on the device; there is no
+            server upload path for source footage. The editor is free to use
+            and the finished file does not contain a turntall.com logo or
+            promotional watermark.
+          </p>
+        </section>
+        <nav aria-label="Information about turntall.com">
+          <a href="/about">About</a>
+          <a href="/contact">Contact</a>
+          <a href="/privacy">Privacy</a>
+          <a href="/llms.txt">Agent guide</a>
+        </nav>
+        <p>
+          JavaScript is required to run the interactive editor. These product
+          details remain available without JavaScript for people, search
+          engines, and AI agents evaluating the service.
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/app/main.ts"></script>
   </body>
 </html>

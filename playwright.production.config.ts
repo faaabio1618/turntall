@@ -4,7 +4,7 @@ const baseURL = "http://127.0.0.1:4174";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: "**/production.e2e.ts",
+  testMatch: ["**/production.e2e.ts", "**/agent-readiness.production.e2e.ts"],
   globalSetup: "./e2e/production-server.ts",
   workers: 1,
   forbidOnly: Boolean(process.env.CI),

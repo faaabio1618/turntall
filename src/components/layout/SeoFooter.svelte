@@ -27,5 +27,11 @@
 
     <footer class="site-footer">
       <span>turntall.com</span>
-      <a href="mailto:info@turntall.com">info@turntall.com</a>
+      <nav aria-label="About turntall.com">
+        <a href="/about">About</a>
+        <a href="/contact">Contact</a>
+        <a href="/privacy">Privacy</a>
+        <a href="/llms.txt">For agents</a>
+        <a href="mailto:info@turntall.com">info@turntall.com</a>
+      </nav>
     </footer>

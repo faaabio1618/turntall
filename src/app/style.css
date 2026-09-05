@@ -154,6 +154,13 @@ main {
   font-weight: 700;
 }
 
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: flex-end;
+}
+
 .site-footer a {
   color: #c2410c;
   font-weight: 650;
@@ -1693,6 +1700,16 @@ progress {
 @media (max-width: 580px) {
   main {
     margin: 24px auto;
+  }
+
+  .site-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .site-footer nav {
+    justify-content: flex-start;
   }
 
   .time-row {

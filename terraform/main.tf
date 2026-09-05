@@ -158,20 +158,30 @@ resource "aws_cloudfront_distribution" "site" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.site.id
     target_origin_id           = "s3-${aws_s3_bucket.site.id}"
     viewer_protocol_policy     = "redirect-to-https"
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.site_request.arn
+    }
+
+    function_association {
+      event_type   = "viewer-response"
+      function_arn = aws_cloudfront_function.site_response.arn
+    }
   }
 
   custom_error_response {
     error_caching_min_ttl = 0
     error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
+    response_code         = 404
+    response_page_path    = "/404.md"
   }
 
   custom_error_response {
     error_caching_min_ttl = 0
     error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
+    response_code         = 404
+    response_page_path    = "/404.md"
   }
 
   restrictions {
@@ -265,6 +275,20 @@ resource "aws_iam_role" "github_deploy" {
 }
 
 data "aws_iam_policy_document" "github_deploy" {
+  statement {
+    sid = "ManageSiteRoutingFunctions"
+    actions = [
+      "cloudfront:CreateFunction",
+      "cloudfront:UpdateFunction",
+      "cloudfront:PublishFunction",
+      "cloudfront:DeleteFunction",
+      "cloudfront:TestFunction",
+    ]
+    resources = [
+      "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:function/${local.resource_name}-site-request",
+      "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:function/${local.resource_name}-site-response",
+    ]
+  }
   statement {
     sid = "ListProductionBucket"
     actions = [

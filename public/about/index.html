@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="About turntall.com, a private local-first browser video editor for creating vertical clips." />
+    <link rel="canonical" href="https://turntall.com/about" />
+    <link rel="alternate" type="text/markdown" href="/about/index.md" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/agent-pages.css" />
+    <title>About · turntall.com</title>
+  </head>
+  <body class="agent-page">
+    <header>
+      <p class="agent-eyebrow">Local video editor</p>
+      <h1>About turntall.com</h1>
+      <nav aria-label="Site navigation">
+        <a href="/">Editor</a><a href="/contact">Contact</a><a href="/privacy">Privacy</a><a href="/llms.txt">Agent guide</a>
+      </nav>
+    </header>
+    <main>
+      <h2>Why it exists</h2>
+      <p>turntall.com was built to solve a focused editing problem: turn a horizontal video into a useful vertical clip without first handing the original footage to a cloud service. The editor lets a person choose exact start and end frames, create a centered 9:16 crop, or draw a box around a moving subject so the crop follows that subject through the clip.</p>
+      <p>The product is deliberately local-first. Video analysis, subject tracking, preview, crop planning, encoding, and final file creation happen on the user’s device in desktop Google Chrome. The web application has no server upload path for source footage. No account is required, the editor is free to use, and turntall.com does not place a logo or promotional watermark over exported videos.</p>
+      <h2>How the editor works</h2>
+      <p>The browser combines WebAssembly media tools with native browser media capabilities. Compatible operations use an efficient path when possible; exact cuts, vertical crops, subject-following motion, and speed changes create a newly encoded output. Large inputs use a streaming path to avoid reading a multi-gigabyte video into one browser memory buffer.</p>
+      <p>turntall.com currently targets desktop Google Chrome because its processing workflow depends on modern browser media APIs. It is best suited to individual creators who want a private, focused tool for clips, Shorts, Reels, TikTok, and other 9:16 formats. It is not a collaborative cloud editor, a hosting service, or a server-side batch conversion API.</p>
+      <p class="agent-note">For product questions, accessibility feedback, or responsible technical reports, use the details on the <a href="/contact">contact page</a>.</p>
+    </main>
+    <footer>© turntall.com · <a href="/">Open the editor</a></footer>
+  </body>
+</html>

@@ -130,7 +130,8 @@ jobs:
           --cache-control "no-cache"
 
       - name: Invalidate CloudFront cache
-        run: >-
-          aws cloudfront create-invalidation
-          --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}"
-          --paths "/*"
+        # S3 MIME inference for .md differs between platforms. Error responses
+        # skip viewer-response functions, so the origin metadata must be right.
+        run: |
+          aws s3 cp dist "s3://${S3_BUCKET_NAME}" --recursive --exclude "*" --include "*.md" --content-type "text/markdown; charset=utf-8" --cache-control "no-cache"
+          aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"

@@ -5,7 +5,7 @@ This root module creates the only application environment: `production`.
 It provisions:
 
 - a private, encrypted, versioned S3 bucket for the Vite bundle;
-- CloudFront with Origin Access Control, HTTPS, SPA fallbacks, compression,
+- CloudFront with Origin Access Control, HTTPS, real 404s, Markdown negotiation, compression,
   and the COOP/COEP headers required by turntall.com;
 - an ACM certificate in `us-east-1` for `turntall.com` and `www.turntall.com`;
 - Cloudflare certificate-validation and site DNS records;
@@ -14,6 +14,9 @@ It provisions:
 
 No video is uploaded by the application. S3 only stores the compiled static
 site.
+
+See [agent readiness release notes](../docs/agent-readiness.md) for the routing
+functions, cache separation, required Markdown MIME metadata, and release checks.
 
 ## Provision production
 
