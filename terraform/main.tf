@@ -279,10 +279,11 @@ data "aws_iam_policy_document" "github_deploy" {
     sid = "ManageSiteRoutingFunctions"
     actions = [
       "cloudfront:CreateFunction",
-      "cloudfront:UpdateFunction",
-      "cloudfront:PublishFunction",
       "cloudfront:DeleteFunction",
+      "cloudfront:DescribeFunction",
+      "cloudfront:PublishFunction",
       "cloudfront:TestFunction",
+      "cloudfront:UpdateFunction",
     ]
     resources = [
       "arn:aws:cloudfront::${data.aws_caller_identity.current.account_id}:function/${local.resource_name}-site-request",
