@@ -54,6 +54,11 @@ describe("CloudFront routes", () => {
   it("handles repeated Accept headers", () => {
     expect(routeRequest({ request: { uri: "/", method: "GET", headers: { accept: { value: "text/html;q=0.1", multiValue: [{ value: "text/html;q=0.1" }, { value: "text/markdown" }] } } } })).toHaveProperty("uri", "/index.md");
   });
+  it("splits Accept headers with a linear scanner instead of a backtracking lookahead", () => {
+    const source = readFileSync("terraform/functions/site-request.js", "utf8");
+    expect(source).not.toMatch(/split\(\s*\/[^/]*\(\?=/);
+    expect(source).toContain("splitOutsideQuotes");
+  });
   it("sets MIME and downstream caching headers on cached responses", () => {
     const handler = runInNewContext(readFileSync("terraform/functions/site-response.js", "utf8") + "\nhandler");
     for (const uri of ["/index.html", "/index.md", "/about/index.md"]) {

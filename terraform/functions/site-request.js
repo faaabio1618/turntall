@@ -1,8 +1,28 @@
 // CloudFront Functions runtime 2.0. Also executed by Vite and the route tests.
+function splitOutsideQuotes(value, delimiter) {
+  var parts = [];
+  var current = '';
+  var quoted = false;
+  for (var index = 0; index < value.length; index++) {
+    var character = value.charAt(index);
+    if (character === '"') {
+      quoted = !quoted;
+      current += character;
+    } else if (character === delimiter && !quoted) {
+      parts.push(current);
+      current = '';
+    } else {
+      current += character;
+    }
+  }
+  parts.push(current);
+  return parts;
+}
+
 function negotiate(accept) {
   if (!accept || !accept.trim()) return 'html';
-  var ranges = accept.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(function (item, order) {
-    var parts = item.split(/;(?=(?:[^"]*"[^"]*")*[^"]*$)/);
+  var ranges = splitOutsideQuotes(accept, ',').map(function (item, order) {
+    var parts = splitOutsideQuotes(item, ';');
     var type = parts.shift().trim().toLowerCase();
     var quality = 1;
     var parameters = 0;
