@@ -20,13 +20,14 @@ device: editing, tracking, previewing, and export all happen locally.
 - Preview the crop before exporting.
 - Download the result without an account or watermark.
 
-The web app supports desktop Google Chrome and Mozilla Firefox 132 or newer.
+The web app supports desktop Google Chrome, Mozilla Firefox 132 or newer, and
+Safari 26 or newer.
 Mobile visitors receive a recommendation to continue on a desktop computer.
 
 ## How to use it
 
-1. Open [turntall.com](https://turntall.com/) in desktop Google Chrome or
-   Firefox.
+1. Open [turntall.com](https://turntall.com/) in desktop Google Chrome, Firefox,
+   or Safari.
 2. Choose a video from your device.
 3. Set the segment you want to keep.
 4. Optionally enable **9:16 vertical video**. For a moving crop, pause on a
@@ -68,15 +69,18 @@ npm run dev
 
 Open the local address printed by Vite.
 
-The Playwright workflows run in Chromium and Firefox. Install both bundled
-browsers once:
+The Playwright workflows run in Chromium and Firefox, plus WebKit on macOS.
+Playwright's WebKit builds for Windows and Linux lack Safari's media APIs, so
+the `webkit` project exists only on macOS; CI runs it on a macOS runner.
+Install the bundled browsers once:
 
 ```sh
 npx playwright install chromium firefox
 npm run test:e2e
 ```
 
-Add `--project chromium` or `--project firefox` to run a single browser.
+On macOS, also run `npx playwright install webkit`. Add `--project chromium`,
+`--project firefox`, or `--project webkit` to run a single browser.
 
 ## Development commands
 

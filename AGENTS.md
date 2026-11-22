@@ -20,13 +20,14 @@ turntall.com is a local-first browser video editor. A user can:
 All video analysis and conversion happens in the browser. Do not introduce a
 server upload path unless the user explicitly changes this product requirement.
 
-The application targets desktop Google Chrome and Firefox 132 or newer
-(`MIN_FIREFOX_VERSION` in `src/platform/browser-support.ts`). Other browsers
-see a blocking dialog, and mobile browsers see a recommendation to use a
+The application targets desktop Google Chrome, Firefox 132 or newer, and
+Safari 26 or newer (`MIN_FIREFOX_VERSION` and `MIN_SAFARI_VERSION` in
+`src/platform/browser-support.ts`). Other browsers see a blocking dialog, and mobile browsers see a recommendation to use a
 desktop. Firefox's native video controls swallow pointer presses and clicks, so
 a Firefox-only `#preview-pointer-layer` above the picture forwards subject
 drags and clicks to the controller; it leaves the native control bar
-uncovered.
+uncovered. Safari is exercised through Playwright's WebKit project, which only
+exists on macOS (CI runs it on a macOS runner).
 
 ## Technology
 
@@ -139,7 +140,8 @@ logic tests in the matching domain. Browser fixtures remain in
   retained. Do not delete that code without explicit approval.
 - Vite serves `ffmpeg-core.js` and `ffmpeg-core.wasm` from `/ffmpeg/` and copies
   them into production output. Preserve the COOP/COEP and cross-origin resource
-  headers in `vite.config.ts`.
+  headers in `vite.config.ts`, including on 304 revalidations: WebKit blocks a
+  re-created FFmpeg worker when they are missing.
 - Processing is cancellable. A change must preserve cancellation for both
   FFmpeg and WebCodecs conversions.
 - Processing progress has prepare, process, and finalize steps. Do not report
