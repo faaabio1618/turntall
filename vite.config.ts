@@ -111,20 +111,46 @@ function ffmpegCoreAssetsPlugin(): Plugin {
   };
 }
 
+const crossOriginIsolationHeaders = {
+  "Cross-Origin-Embedder-Policy": "require-corp",
+  "Cross-Origin-Opener-Policy": "same-origin",
+};
+
+// Vite's `headers` option is not applied to 304 revalidation responses.
+// WebKit then blocks a re-created FFmpeg worker under COEP (Chrome and
+// Firefox keep the cached headers), so set the headers on every response.
+function crossOriginIsolationPlugin(): Plugin {
+  const setHeaders: Connect.NextHandleFunction = (_request, response, next) => {
+    for (const [name, value] of Object.entries(crossOriginIsolationHeaders)) {
+      response.setHeader(name, value);
+    }
+    next();
+  };
+
+  return {
+    name: "cross-origin-isolation",
+    configureServer(server) {
+      server.middlewares.use(setHeaders);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(setHeaders);
+    },
+  };
+}
+
 export default defineConfig({
   appType: "mpa",
-  plugins: [agentReadyRoutesPlugin(), svelte(), ffmpegCoreAssetsPlugin()],
+  plugins: [
+    crossOriginIsolationPlugin(),
+    agentReadyRoutesPlugin(),
+    svelte(),
+    ffmpegCoreAssetsPlugin(),
+  ],
   server: {
-    headers: {
-      "Cross-Origin-Embedder-Policy": "require-corp",
-      "Cross-Origin-Opener-Policy": "same-origin",
-    },
+    headers: crossOriginIsolationHeaders,
   },
   preview: {
-    headers: {
-      "Cross-Origin-Embedder-Policy": "require-corp",
-      "Cross-Origin-Opener-Policy": "same-origin",
-    },
+    headers: crossOriginIsolationHeaders,
   },
   optimizeDeps: {
     exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],

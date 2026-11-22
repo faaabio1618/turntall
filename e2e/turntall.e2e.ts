@@ -96,6 +96,46 @@ async function drawSubjectBox(
   return bounds;
 }
 
+// The 3-second fixture can finish exporting between two Playwright polls on
+// fast machines (0.4 s on macOS runners), so act in the page the moment
+// Cancel appears instead of waiting to observe it.
+async function whenProcessingStarts(page, action) {
+  await page.evaluate((action) => {
+    const cancel = document.querySelector("#cancel-button");
+    const preview = document.querySelector("#preview");
+    const observer = new MutationObserver(() => {
+      if (cancel.hidden) {
+        return;
+      }
+      observer.disconnect();
+      const record = { timeBefore: preview.currentTime, done: false };
+      window.__processingAction = record;
+      cancel.focus();
+      if (action === "cancel") {
+        cancel.click();
+      } else {
+        cancel.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "ArrowRight",
+            code: "ArrowRight",
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      }
+      record.done = true;
+    });
+    observer.observe(cancel, { attributes: true, attributeFilter: ["hidden"] });
+  }, action);
+}
+
+async function processingAction(page) {
+  await expect
+    .poll(() => page.evaluate(() => window.__processingAction?.done))
+    .toBe(true);
+  return page.evaluate(() => window.__processingAction);
+}
+
 async function outputMetadata(page) {
   const outputURL = await page.locator("#download-link").getAttribute("href");
   return page.evaluate(
@@ -932,18 +972,14 @@ test("arrows step the source while output is processing", async ({ page }) => {
   await page.locator("#vertical-mode").check();
 
   const preview = page.locator("#preview");
-  const timeBeforeArrow = await preview.evaluate(
-    (video) => video.currentTime,
-  );
+  await whenProcessingStarts(page, "step-forward");
   await page.locator("#cut-button").click();
-  const cancel = page.locator("#cancel-button");
-  await expect(cancel).toBeVisible();
-  await cancel.focus();
-  await page.keyboard.press("ArrowRight");
+  const { timeBefore } = await processingAction(page);
   await expect
     .poll(() => preview.evaluate((video) => video.currentTime))
-    .toBeCloseTo(timeBeforeArrow + 1 / 30, 2);
+    .toBeCloseTo(timeBefore + 1 / 30, 2);
 
+  const cancel = page.locator("#cancel-button");
   // The short fixture can finish exporting before Cancel is clicked.
   await cancel.click({ timeout: 2_000 }).catch(async () => {
     await expect(cancel).toBeHidden();
@@ -1006,10 +1042,9 @@ test("cancels an FFmpeg export before safely starting another", async ({
   await loadFixture(page);
 
   await page.locator("#vertical-mode").check();
+  await whenProcessingStarts(page, "cancel");
   await page.locator("#cut-button").click();
-  const cancel = page.locator("#cancel-button");
-  await expect(cancel).toBeVisible();
-  await cancel.click();
+  await processingAction(page);
   await expect(page.locator("#status")).toHaveText("Cut cancelled.", {
     timeout: 30_000,
   });
