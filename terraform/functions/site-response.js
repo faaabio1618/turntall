@@ -5,6 +5,9 @@ function handler(event) {
   response.headers.link = { value: '</llms.txt>; rel="describedby"' };
   if (/\.md$/.test(uri)) {
     response.headers['content-type'] = { value: 'text/markdown; charset=utf-8' };
+  } else if (/\.txt$/.test(uri)) {
+    // Without a charset, browsers decode UTF-8 text such as "×" as Windows-1252.
+    response.headers['content-type'] = { value: 'text/plain; charset=utf-8' };
   }
   return response;
 }

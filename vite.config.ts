@@ -42,11 +42,15 @@ function agentReadyRoutesPlugin(): Plugin {
         return;
       }
       request.url = result.uri + url.search;
-      // Serve Markdown explicitly: static-server MIME tables differ by OS.
-      const markdownPath = resolve(development ? "public" : "dist", "." + result.uri);
-      if (result.uri.endsWith(".md") && existsSync(markdownPath)) {
-        const body = readFileSync(markdownPath);
-        response.setHeader("Content-Type", "text/markdown; charset=utf-8");
+      // Serve Markdown and plain text explicitly: static-server MIME tables
+      // differ by OS and omit the charset, so UTF-8 text would be misread.
+      const textPath = resolve(development ? "public" : "dist", "." + result.uri);
+      const textType = result.uri.endsWith(".md")
+        ? "text/markdown; charset=utf-8"
+        : result.uri.endsWith(".txt") ? "text/plain; charset=utf-8" : undefined;
+      if (textType && existsSync(textPath)) {
+        const body = readFileSync(textPath);
+        response.setHeader("Content-Type", textType);
         response.setHeader("Content-Length", body.length);
         response.end(request.method === "HEAD" ? undefined : body);
         return;

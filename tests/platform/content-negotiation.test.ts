@@ -67,4 +67,9 @@ describe("CloudFront routes", () => {
       if (uri.endsWith(".md")) expect(response.headers["content-type"].value).toBe("text/markdown; charset=utf-8");
     }
   });
+  it.each(["/llms.txt", "/robots.txt"])("declares UTF-8 for plain-text discovery files: %s", (uri) => {
+    const handler = runInNewContext(readFileSync("terraform/functions/site-response.js", "utf8") + "\nhandler");
+    const response = handler({ request: { uri }, response: { statusCode: 200, headers: { "content-type": { value: "text/plain" } } } });
+    expect(response.headers["content-type"].value).toBe("text/plain; charset=utf-8");
+  });
 });

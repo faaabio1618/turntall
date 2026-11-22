@@ -167,4 +167,5 @@ jobs:
         # skip viewer-response functions, so the origin metadata must be right.
         run: |
           aws s3 cp dist "s3://${S3_BUCKET_NAME}" --recursive --exclude "*" --include "*.md" --content-type "text/markdown; charset=utf-8" --cache-control "no-cache"
+          aws s3 cp dist "s3://${S3_BUCKET_NAME}" --recursive --exclude "*" --include "*.txt" --content-type "text/plain; charset=utf-8" --cache-control "no-cache"
           aws cloudfront create-invalidation --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" --paths "/*"
