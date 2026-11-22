@@ -2,6 +2,8 @@ import {
   ALL_FORMATS,
   BlobSource,
   BufferTarget,
+  canEncodeAudio,
+  canEncodeVideo,
   Conversion,
   EncodedAudioPacketSource,
   EncodedPacketSink,
@@ -129,23 +131,71 @@ export function retimeVideoSample(sample: VideoSample, playbackRate: number) {
   return sample;
 }
 
+/**
+ * A trimmed start makes Mediabunny decode and re-encode audio. Copy packets
+ * instead when the browser cannot decode the source, or cannot encode that
+ * codec again (Firefox decodes AAC but cannot encode it) while the output
+ * container accepts the original packets.
+ */
 export function shouldCopyTrimmedAudioPackets({
   keepAudio,
   start,
   firstTimestamp,
   canDecode,
+  canReencode = true,
 }: {
   keepAudio: boolean;
   start: number;
   firstTimestamp: number;
   canDecode: boolean;
+  canReencode?: boolean;
 }) {
   return (
     keepAudio &&
     Number.isFinite(start) &&
     start > firstTimestamp &&
-    !canDecode
+    (!canDecode || !canReencode)
   );
+}
+
+async function canReencodeAudioTrack(
+  track: InputAudioTrack,
+  output: Output<Mp4OutputFormat, BufferTarget | StreamTarget>,
+) {
+  try {
+    const codec = await track.getCodec();
+    if (
+      !codec ||
+      !output.format.getSupportedAudioCodecs?.().includes(codec)
+    ) {
+      // Packet copy is impossible, so keep Mediabunny's transcoding choice.
+      return true;
+    }
+    return await canEncodeAudio(codec, {
+      numberOfChannels: track.numberOfChannels,
+      sampleRate: track.sampleRate,
+    });
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Prefer a hardware H.264 encoder, but fall back when there is none. Firefox
+ * and some Chrome installations reject `prefer-hardware` outright.
+ */
+async function avcHardwareAcceleration(width: number, height: number) {
+  try {
+    const supported = await canEncodeVideo("avc", {
+      width: Math.round(width),
+      height: Math.round(height),
+      bitrate: QUALITY_HIGH,
+      hardwareAcceleration: "prefer-hardware",
+    });
+    return supported ? "prefer-hardware" : "no-preference";
+  } catch {
+    return "no-preference";
+  }
 }
 
 async function attachPacketCopiedAudio(
@@ -201,23 +251,39 @@ async function attachPacketCopiedAudio(
   })());
 }
 
+function createBufferOutputTarget() {
+  const target = new BufferTarget();
+  return {
+    target,
+    getResult: () => target.buffer,
+    cleanup: undefined as undefined | (() => Promise<void>),
+  };
+}
+
 async function createOutputTarget(diskBacked: boolean) {
   if (!diskBacked || !navigator.storage?.getDirectory) {
-    const target = new BufferTarget();
-    return {
-      target,
-      getResult: () => target.buffer,
-      cleanup: undefined as undefined | (() => Promise<void>),
-    };
+    return createBufferOutputTarget();
   }
 
-  const directory = await navigator.storage.getDirectory();
-  const suffix = globalThis.crypto?.randomUUID?.() ?? Date.now();
-  const filename = `turntall-output-${suffix}.mp4`;
-  const handle = await directory.getFileHandle(filename, {
-    create: true,
-  });
-  const writable = await handle.createWritable();
+  let directory: FileSystemDirectoryHandle;
+  let filename: string;
+  let handle: FileSystemFileHandle;
+  let writable: FileSystemWritableFileStream;
+  try {
+    directory = await navigator.storage.getDirectory();
+    const suffix = globalThis.crypto?.randomUUID?.() ?? Date.now();
+    filename = `turntall-output-${suffix}.mp4`;
+    handle = await directory.getFileHandle(filename, {
+      create: true,
+    });
+    writable = await handle.createWritable();
+  } catch {
+    // Firefox private windows deny origin-private storage.
+    if (directory && filename) {
+      await directory.removeEntry(filename).catch(() => {});
+    }
+    return createBufferOutputTarget();
+  }
 
   return {
     target: new StreamTarget(writable, {
@@ -272,7 +338,10 @@ async function createConversion(
       codec: "avc",
       bitrate: QUALITY_HIGH,
       forceTranscode: true,
-      hardwareAcceleration: "prefer-hardware",
+      hardwareAcceleration: await avcHardwareAcceleration(
+        vertical ? cropSize.width : sourceWidth,
+        vertical ? cropSize.height : sourceHeight,
+      ),
     };
     const speedChanged = Math.abs(playbackRate - 1) > 0.000001;
     const outputKeepsAudio = keepAudio && !speedChanged;
@@ -313,6 +382,7 @@ async function createConversion(
           start,
           firstTimestamp: await audioTrack.getFirstTimestamp(),
           canDecode: await audioTrack.canDecode(),
+          canReencode: await canReencodeAudioTrack(audioTrack, output),
         }),
     );
 

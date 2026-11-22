@@ -10,6 +10,8 @@ import {
 const media = vi.hoisted(() => ({
   audioSources: [],
   bufferResult: new Uint8Array([1, 2, 3]),
+  canEncodeAudio: vi.fn(),
+  canEncodeVideo: vi.fn(),
   conversion: undefined,
   conversionInit: vi.fn(),
   inputInstances: [],
@@ -60,6 +62,7 @@ vi.mock("mediabunny", () => {
   class Output {
     constructor(options) {
       this.options = options;
+      this.format = options.format;
       this.addAudioTrack = vi.fn();
       this.cancel = vi.fn(async () => {});
       this.finalize = vi.fn(async () => {});
@@ -70,6 +73,10 @@ vi.mock("mediabunny", () => {
   class Mp4OutputFormat {
     constructor(options) {
       this.options = options;
+    }
+
+    getSupportedAudioCodecs() {
+      return ["aac", "opus", "mp3", "flac"];
     }
   }
 
@@ -101,6 +108,8 @@ vi.mock("mediabunny", () => {
     ALL_FORMATS: Symbol("formats"),
     BlobSource,
     BufferTarget,
+    canEncodeAudio: media.canEncodeAudio,
+    canEncodeVideo: media.canEncodeVideo,
     Conversion: { init: media.conversionInit },
     EncodedAudioPacketSource,
     EncodedPacketSink,
@@ -166,6 +175,8 @@ beforeEach(() => {
     id: "audio",
     canDecode: vi.fn(async () => true),
     getCodec: vi.fn(async () => "aac"),
+    numberOfChannels: 2,
+    sampleRate: 48_000,
     getDecoderConfig: vi.fn(async () => ({ codec: "mp4a.40.2" })),
     getFirstTimestamp: vi.fn(async () => 0),
   };
@@ -178,6 +189,10 @@ beforeEach(() => {
   media.streamTargets.length = 0;
   media.conversion = createConversion();
   media.conversionInit.mockReset();
+  media.canEncodeAudio.mockReset();
+  media.canEncodeAudio.mockResolvedValue(true);
+  media.canEncodeVideo.mockReset();
+  media.canEncodeVideo.mockResolvedValue(true);
   media.conversionInit.mockImplementation(async ({ output }) => {
     media.conversion.output = output;
     return media.conversion;
@@ -217,6 +232,16 @@ describe("native browser video editing helpers", () => {
   it.each([
     [{ keepAudio: true, start: 4, firstTimestamp: 0, canDecode: false }, true],
     [{ keepAudio: true, start: 4, firstTimestamp: 0, canDecode: true }, false],
+    [
+      {
+        keepAudio: true,
+        start: 4,
+        firstTimestamp: 0,
+        canDecode: true,
+        canReencode: false,
+      },
+      true,
+    ],
     [{ keepAudio: false, start: 4, firstTimestamp: 0, canDecode: false }, false],
     [{ keepAudio: true, start: 0, firstTimestamp: 0, canDecode: false }, false],
     [{ keepAudio: true, start: Number.NaN, firstTimestamp: 0, canDecode: false }, false],
@@ -275,7 +300,29 @@ describe("WebCodecs capability probing", () => {
       hardwareAcceleration: "prefer-hardware",
     });
     expect(options.trim).toBeUndefined();
+    expect(media.canEncodeVideo).toHaveBeenCalledWith("avc", {
+      width: 608,
+      height: 1080,
+      bitrate: 9_000_000,
+      hardwareAcceleration: "prefer-hardware",
+    });
     expect(media.inputInstances[0].dispose).toHaveBeenCalledOnce();
+  });
+
+  it("falls back when no hardware H.264 encoder is available", async () => {
+    media.canEncodeVideo.mockResolvedValue(false);
+
+    await expect(
+      canEditWithWebCodecs(new Blob(), {
+        sourceWidth: 1920,
+        sourceHeight: 1080,
+        cropSize: { width: 608, height: 1080 },
+      }),
+    ).resolves.toBe(true);
+
+    expect(media.conversionInit.mock.calls[0][0].video).toMatchObject({
+      hardwareAcceleration: "no-preference",
+    });
   });
 
   it("rejects a source without video and disposes it", async () => {
@@ -453,6 +500,52 @@ describe("WebCodecs cutting", () => {
     });
     expect(source.add.mock.calls[1][0].timestamp).toBeCloseTo(0.4);
     expect(source.close).toHaveBeenCalledOnce();
+  });
+
+  it("packet-copies trimmed audio the browser cannot encode again", async () => {
+    media.canEncodeAudio.mockResolvedValue(false);
+    media.packetSinkState.packets = [packet(0.98), packet(1.4), packet(3.1)];
+
+    await cutWithWebCodecs(new Blob(), baseOptions());
+
+    expect(media.canEncodeAudio).toHaveBeenCalledWith("aac", {
+      numberOfChannels: 2,
+      sampleRate: 48_000,
+    });
+    expect(media.conversionInit.mock.calls[0][0].audio()).toEqual([]);
+    const source = media.audioSources[0];
+    expect(source.codec).toBe("aac");
+    expect(source.add).toHaveBeenCalledTimes(2);
+  });
+
+  it("transcodes trimmed audio when the container cannot copy it", async () => {
+    media.inputState.audioTrack.getCodec.mockResolvedValue("vorbis");
+    media.canEncodeAudio.mockResolvedValue(false);
+
+    await cutWithWebCodecs(new Blob(), baseOptions());
+
+    expect(media.canEncodeAudio).not.toHaveBeenCalled();
+    expect(media.conversionInit.mock.calls[0][0].audio).toBeUndefined();
+    expect(media.audioSources).toHaveLength(0);
+  });
+
+  it("keeps the result in memory when origin-private storage is denied", async () => {
+    vi.stubGlobal("navigator", {
+      storage: {
+        getDirectory: vi.fn(async () => {
+          throw new DOMException("Denied", "SecurityError");
+        }),
+      },
+    });
+
+    const result = await cutWithWebCodecs(new Blob(), {
+      ...baseOptions(),
+      diskBacked: true,
+    });
+
+    expect(result.data).toBe(media.bufferResult);
+    expect(result.cleanup).toBeUndefined();
+    expect(media.streamTargets).toHaveLength(0);
   });
 
   it("uses OPFS for disk-backed output and exposes cleanup", async () => {
