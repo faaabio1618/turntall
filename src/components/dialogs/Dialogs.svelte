@@ -6,10 +6,11 @@
     >
       <div class="confirmation-dialog">
         <p class="browser-gate-label">Browser not supported</p>
-        <h2 id="browser-gate-title">Open this page in Google Chrome</h2>
+        <h2 id="browser-gate-title">Open this page in Chrome or Firefox</h2>
         <p id="browser-gate-copy">
-          This video editor requires Google Chrome. To start using it, copy
-          this page's address and open it in Chrome.
+          This video editor requires an up-to-date Google Chrome or Mozilla
+          Firefox. To start using it, copy this page's address and open it in
+          one of them.
         </p>
         <div class="confirmation-dialog-actions">
           <a
@@ -17,7 +18,14 @@
             href="https://www.google.com/chrome/"
             rel="noreferrer"
           >
-            Get Google Chrome
+            Get Chrome
+          </a>
+          <a
+            class="button-link"
+            href="https://www.mozilla.org/firefox/new/"
+            rel="noreferrer"
+          >
+            Get Firefox
           </a>
         </div>
       </div>

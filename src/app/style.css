@@ -359,6 +359,13 @@ video {
   margin: 0;
 }
 
+/* Leaves the native control bar uncovered; see VIDEO_CONTROLS_GUARD_HEIGHT. */
+.preview-pointer-layer {
+  position: absolute;
+  z-index: 1;
+  inset: 0 0 min(52px, 24%);
+}
+
 .video-preparation-overlay {
   position: absolute;
   z-index: 5;

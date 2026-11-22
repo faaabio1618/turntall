@@ -118,6 +118,13 @@ describe("frame stepping", () => {
     expect(frameStepTime(2, -1, 25, 10)).toBeCloseTo(1.96);
   });
 
+  it("aligns stepped times with microsecond presented-frame metadata", () => {
+    // Firefox reports the exact double assigned to currentTime, while frame
+    // metadata and saved subject times use microseconds.
+    expect(frameStepTime(0.0010000000000000009, 1, 30, 3)).toBe(0.034333);
+    expect(frameStepTime(0.034333, -1, 30, 3)).toBe(0.001);
+  });
+
   it("uses 30 fps as a fallback and stays inside the video", () => {
     expect(frameStepTime(0, -1, undefined, 10)).toBe(0);
     expect(frameStepTime(10, 1, 0, 10)).toBe(10);

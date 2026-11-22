@@ -112,6 +112,16 @@ export function presentedFrameTime(
     : currentTime;
 }
 
+/**
+ * Round a media time to the microsecond precision browsers use for
+ * presented-frame metadata. Chrome also quantizes `currentTime` this way, but
+ * Firefox keeps the exact assigned double, which would otherwise place a
+ * stepped playhead a fraction of a microsecond after a saved frame time.
+ */
+export function microsecondTime(time: number) {
+  return Math.round(time * 1e6) / 1e6;
+}
+
 export function frameStepTime(
   currentTime: number,
   direction: number,
@@ -121,7 +131,7 @@ export function frameStepTime(
   const safeFrameRate =
     Number.isFinite(frameRate) && frameRate > 0 ? frameRate : 30;
   return clamp(
-    currentTime + Math.sign(direction) / safeFrameRate,
+    microsecondTime(currentTime + Math.sign(direction) / safeFrameRate),
     0,
     duration,
   );

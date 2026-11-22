@@ -17,13 +17,24 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    ...devices["Desktop Chrome"],
     baseURL,
-    channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     video: "retain-on-failure",
   },
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        channel: process.env.PLAYWRIGHT_CHANNEL || undefined,
+      },
+    },
+    {
+      name: "firefox",
+      use: devices["Desktop Firefox"],
+    },
+  ],
   webServer: {
     command:
       "npm run dev -- --host 127.0.0.1 --port 4173 --strictPort",

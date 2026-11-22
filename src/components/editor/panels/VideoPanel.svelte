@@ -17,6 +17,12 @@
             aria-keyshortcuts="Space ArrowLeft ArrowRight"
           ></video>
           <div
+            id="preview-pointer-layer"
+            class="preview-pointer-layer"
+            aria-hidden="true"
+            hidden
+          ></div>
+          <div
             id="video-preparation-overlay"
             class="video-preparation-overlay"
             role="status"

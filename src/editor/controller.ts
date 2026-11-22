@@ -2497,6 +2497,15 @@ function handlePreviewClick(event: { clientY: number; preventDefault: () => void
   }
 }
 
+function togglePreviewFullscreen(event: MouseEvent) {
+  event.preventDefault();
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => {});
+  } else if (!editorLocked() && browserPreviewReadable === true) {
+    void elements.preview.requestFullscreen().catch(() => {});
+  }
+}
+
 function handlePreviewPlaybackStart() {
   if (isSelectingSubject || previewSubjectGesture?.started) {
     elements.preview.pause();
@@ -4347,6 +4356,16 @@ elements.preview.addEventListener(
   "click",
   handlePreviewClick,
   true,
+);
+// Only shown in Firefox, whose native video controls swallow these events.
+elements.previewPointerLayer.addEventListener("pointerdown", (event) => {
+  elements.preview.focus({ preventScroll: true });
+  beginPreviewSubjectGesture(event);
+});
+elements.previewPointerLayer.addEventListener("click", handlePreviewClick);
+elements.previewPointerLayer.addEventListener(
+  "dblclick",
+  togglePreviewFullscreen,
 );
 elements.preview.addEventListener(
   "play",

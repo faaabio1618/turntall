@@ -17,7 +17,8 @@ import {
   createElement as createLucideIcon,
 } from "lucide";
 import {
-  isGoogleChrome,
+  isSupportedBrowser,
+  nativeVideoControlsCapturePointer,
   type BrowserNavigator,
 } from "../platform/browser-support.ts";
 
@@ -101,6 +102,7 @@ export function collectUiElements(root: ParentNode = document) {
     videoFps: get("#video-fps"),
     previewStage: get("#preview-stage"),
     preview: get<HTMLVideoElement>("#preview"),
+    previewPointerLayer: get("#preview-pointer-layer"),
     videoPreparationOverlay: get("#video-preparation-overlay"),
     videoPreparationMessage: get("#video-preparation-message"),
     frameStepControls: get("#frame-step-controls"),
@@ -213,8 +215,12 @@ export function initializeUi(
     (/Macintosh/i.test(browserNavigator.userAgent) &&
       browserNavigator.maxTouchPoints > 1);
   elements.mobileWarning.hidden = !isMobileBrowser;
+  // Firefox's native controls keep pointer presses inside the video, so a
+  // transparent layer above the picture (not the control bar) receives them.
+  elements.previewPointerLayer.hidden =
+    !nativeVideoControlsCapturePointer(browserNavigator);
 
-  if (!isGoogleChrome(browserNavigator)) {
+  if (!isSupportedBrowser(browserNavigator)) {
     elements.browserGate.addEventListener("cancel", (event: { preventDefault: () => void; }) => {
       event.preventDefault();
     });

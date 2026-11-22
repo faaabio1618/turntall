@@ -7,6 +7,11 @@ const VIDEO_FIXTURE = fileURLToPath(
 
 async function openSupportedApp(page) {
   await page.addInitScript(() => {
+    // Playwright's Chromium is not branded Google Chrome. Firefox exposes no
+    // client hints and is recognized from its real user agent.
+    if (!("userAgentData" in navigator)) {
+      return;
+    }
     Object.defineProperty(navigator, "userAgentData", {
       configurable: true,
       value: {
@@ -112,7 +117,8 @@ async function outputMetadata(page) {
   );
 }
 
-test("blocks unsupported Chromium browsers", async ({ page }) => {
+test("blocks unsupported Chromium browsers", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Client hints exist only in Chromium.");
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "userAgentData", {
       configurable: true,
@@ -130,7 +136,23 @@ test("blocks unsupported Chromium browsers", async ({ page }) => {
 
   const dialog = page.locator("#browser-gate");
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("Open this page in Google Chrome");
+  await expect(dialog).toContainText("Open this page in Chrome or Firefox");
+});
+
+test.describe("an outdated Firefox", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
+  });
+
+  test("is blocked", async ({ page, browserName }) => {
+    test.skip(browserName !== "firefox", "Checks Firefox's own gate.");
+    await page.goto("/");
+
+    const dialog = page.locator("#browser-gate");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Open this page in Chrome or Firefox");
+  });
 });
 
 test("loads a local video, updates the segment, and previews it", async ({
@@ -182,11 +204,15 @@ test("loads a local video, updates the segment, and previews it", async ({
   await page.locator("#vertical-mode").uncheck();
 
   const sourceVideo = page.locator("#preview");
-  await sourceVideo.click({ position: { x: 80, y: 80 } });
+  // Click the picture by coordinates: Firefox covers it with a pointer layer.
+  await sourceVideo.scrollIntoViewIfNeeded();
+  const sourceBounds = await sourceVideo.boundingBox();
+  expect(sourceBounds).not.toBeNull();
+  await page.mouse.click(sourceBounds.x + 80, sourceBounds.y + 80);
   await expect
     .poll(() => sourceVideo.evaluate((video) => video.paused))
     .toBe(false);
-  await sourceVideo.click({ position: { x: 80, y: 80 } });
+  await page.mouse.click(sourceBounds.x + 80, sourceBounds.y + 80);
   await expect
     .poll(() => sourceVideo.evaluate((video) => video.paused))
     .toBe(true);
@@ -902,9 +928,10 @@ test("arrows step the source while output is processing", async ({ page }) => {
     .poll(() => preview.evaluate((video) => video.currentTime))
     .toBeCloseTo(timeBeforeArrow + 1 / 30, 2);
 
-  if (await cancel.isVisible()) {
-    await cancel.click();
-  }
+  // The short fixture can finish exporting before Cancel is clicked.
+  await cancel.click({ timeout: 2_000 }).catch(async () => {
+    await expect(cancel).toBeHidden();
+  });
   expect(runtimeErrors).toEqual([]);
 });
 
