@@ -136,7 +136,23 @@ test("blocks unsupported Chromium browsers", async ({ page, browserName }) => {
 
   const dialog = page.locator("#browser-gate");
   await expect(dialog).toBeVisible();
-  await expect(dialog).toContainText("Open this page in Chrome or Firefox");
+  await expect(dialog).toContainText("Open this page in Chrome, Firefox, or Safari");
+});
+
+test.describe("an outdated Safari", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+  });
+
+  test("is blocked", async ({ page, browserName }) => {
+    test.skip(browserName !== "webkit", "Checks Safari's own gate.");
+    await page.goto("/");
+
+    const dialog = page.locator("#browser-gate");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText("Open this page in Chrome, Firefox, or Safari");
+  });
 });
 
 test.describe("an outdated Firefox", () => {
@@ -151,7 +167,7 @@ test.describe("an outdated Firefox", () => {
 
     const dialog = page.locator("#browser-gate");
     await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText("Open this page in Chrome or Firefox");
+    await expect(dialog).toContainText("Open this page in Chrome, Firefox, or Safari");
   });
 });
 

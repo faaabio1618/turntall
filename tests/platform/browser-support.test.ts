@@ -3,6 +3,7 @@ import {
   isGoogleChrome,
   isSupportedBrowser,
   isSupportedFirefox,
+  isSupportedSafari,
   nativeVideoControlsCapturePointer,
 } from "../../src/platform/browser-support.ts";
 
@@ -101,8 +102,44 @@ describe("Firefox detection", () => {
   });
 });
 
+const SAFARI_MAC =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15";
+
+describe("Safari detection", () => {
+  it.each([
+    SAFARI_MAC,
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.1 Mobile/15E148 Safari/604.1",
+  ])("accepts a current Safari: %s", (userAgent) => {
+    expect(isSupportedSafari({ userAgent })).toBe(true);
+  });
+
+  it("rejects Safari releases before 26", () => {
+    expect(
+      isSupportedSafari({
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Safari/605.1.15",
+      }),
+    ).toBe(false);
+  });
+
+  it.each([
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/136.0.0.0 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/146.0 Mobile/15E148 Safari/605.1.15",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 26_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 EdgiOS/136.0 Mobile/15E148 Safari/605.1.15",
+    "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/136.0.0.0 Mobile Safari/537.36",
+    "Mozilla/5.0 Version/26.5 Safari/605.1.15",
+    "",
+  ])("does not treat another browser as Safari: %s", (userAgent) => {
+    expect(isSupportedSafari({ userAgent })).toBe(false);
+  });
+});
+
 describe("native video control pointer handling", () => {
   it("needs a pointer layer only for Gecko's video controls", () => {
+    expect(nativeVideoControlsCapturePointer({ userAgent: SAFARI_MAC })).toBe(
+      false,
+    );
     expect(nativeVideoControlsCapturePointer({ userAgent: FIREFOX_WINDOWS })).toBe(
       true,
     );
@@ -116,13 +153,14 @@ describe("native video control pointer handling", () => {
 });
 
 describe("supported browser detection", () => {
-  it("accepts Google Chrome and Firefox", () => {
+  it("accepts Google Chrome, Firefox, and Safari", () => {
     expect(
       isSupportedBrowser({
         userAgent: "Mozilla/5.0 Chrome/126.0.0.0 Safari/537.36",
       }),
     ).toBe(true);
     expect(isSupportedBrowser({ userAgent: FIREFOX_WINDOWS })).toBe(true);
+    expect(isSupportedBrowser({ userAgent: SAFARI_MAC })).toBe(true);
   });
 
   it.each([

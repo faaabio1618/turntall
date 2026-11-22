@@ -34,6 +34,12 @@ export default defineConfig({
       name: "firefox",
       use: devices["Desktop Firefox"],
     },
+    // Playwright's WebKit builds for Windows and Linux lack Safari's media
+    // stack (no requestVideoFrameCallback or WebCodecs), so only macOS
+    // stands in for Safari.
+    ...(process.platform === "darwin"
+      ? [{ name: "webkit", use: devices["Desktop Safari"] }]
+      : []),
   ],
   webServer: {
     command:

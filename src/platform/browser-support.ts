@@ -11,6 +11,16 @@ const GECKO_ENGINE = /\bGecko\/\d/;
  */
 export const MIN_FIREFOX_VERSION = 132;
 
+const SAFARI_VERSION = /\bVersion\/(\d+)[\d.]*(?: Mobile\/\w+)? Safari\//;
+const OTHER_WEBKIT_BROWSER =
+  /\b(?:Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS|Android|SamsungBrowser)\b/i;
+
+/**
+ * Safari 26 is the release line covered by the WebKit end-to-end run.
+ * Earlier releases lack parts of WebCodecs that large files rely on.
+ */
+export const MIN_SAFARI_VERSION = 26;
+
 export interface BrowserNavigator {
   userAgent?: string;
   userAgentData?: {
@@ -74,8 +84,26 @@ export function isSupportedBrowser(
   browserNavigator: BrowserNavigator = navigator as BrowserNavigator,
 ) {
   return (
-    isGoogleChrome(browserNavigator) || isSupportedFirefox(browserNavigator)
+    isGoogleChrome(browserNavigator) ||
+    isSupportedFirefox(browserNavigator) ||
+    isSupportedSafari(browserNavigator)
   );
+}
+
+/**
+ * Detect Apple's Safari. Other WebKit-based browsers either name themselves
+ * (CriOS, FxiOS, EdgiOS) or, on Android, use a different engine.
+ */
+export function isSupportedSafari(
+  browserNavigator: BrowserNavigator = navigator as BrowserNavigator,
+) {
+  const userAgent = browserNavigator.userAgent ?? "";
+  if (!/\bAppleWebKit\//.test(userAgent) || OTHER_WEBKIT_BROWSER.test(userAgent)) {
+    return false;
+  }
+
+  const version = Number(SAFARI_VERSION.exec(userAgent)?.[1]);
+  return Number.isFinite(version) && version >= MIN_SAFARI_VERSION;
 }
 
 /**

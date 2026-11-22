@@ -6,11 +6,13 @@
     >
       <div class="confirmation-dialog">
         <p class="browser-gate-label">Browser not supported</p>
-        <h2 id="browser-gate-title">Open this page in Chrome or Firefox</h2>
+        <h2 id="browser-gate-title">
+          Open this page in Chrome, Firefox, or Safari
+        </h2>
         <p id="browser-gate-copy">
-          This video editor requires an up-to-date Google Chrome or Mozilla
-          Firefox. To start using it, copy this page's address and open it in
-          one of them.
+          This video editor requires an up-to-date Google Chrome, Mozilla
+          Firefox, or Safari. To start using it, copy this page's address and
+          open it in one of them.
         </p>
         <div class="confirmation-dialog-actions">
           <a
