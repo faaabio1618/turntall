@@ -4,7 +4,7 @@ Contact **info@turntall.com** for product questions, accessibility feedback, pri
 
 ## What to include
 
-For a product or compatibility problem, describe what you were trying to do, the version of desktop Google Chrome you used, the source container or extension, and the point where the workflow stopped. A short description of any visible error is useful. Please do not attach private source videos unless you have first agreed on a safe and necessary way to share a minimal reproduction.
+For a product or compatibility problem, describe what you were trying to do, the desktop browser and version you used, the source container or extension, and the point where the workflow stopped. A short description of any visible error is useful. Please do not attach private source videos unless you have first agreed on a safe and necessary way to share a minimal reproduction.
 
 For a tracking issue, explain whether the subject moved quickly, left the frame, became hidden, or crossed a scene change. For an export issue, include the selected output options, approximate clip duration, and whether the source had audio. These details help reproduce the behavior without requiring access to personal footage.
 

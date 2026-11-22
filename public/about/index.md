@@ -4,7 +4,7 @@ turntall.com was built to solve a focused editing problem: turn a horizontal vid
 
 ## Local-first by design
 
-Video analysis, subject tracking, preview, crop planning, encoding, and final file creation happen on the user's device in desktop Google Chrome. The web application has no server upload path for source footage. No account is required, the editor is free to use, and turntall.com does not place a logo or promotional watermark over exported videos.
+Video analysis, subject tracking, preview, crop planning, encoding, and final file creation happen on the user's device in desktop Google Chrome or Firefox. The web application has no server upload path for source footage. No account is required, the editor is free to use, and turntall.com does not place a logo or promotional watermark over exported videos.
 
 ## How the editor works
 

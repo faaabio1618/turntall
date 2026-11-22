@@ -20,8 +20,13 @@ turntall.com is a local-first browser video editor. A user can:
 All video analysis and conversion happens in the browser. Do not introduce a
 server upload path unless the user explicitly changes this product requirement.
 
-The application currently targets Google Chrome. Unsupported browsers see a
-blocking dialog, and mobile browsers see a recommendation to use a desktop.
+The application targets desktop Google Chrome and Firefox 132 or newer
+(`MIN_FIREFOX_VERSION` in `src/platform/browser-support.ts`). Other browsers
+see a blocking dialog, and mobile browsers see a recommendation to use a
+desktop. Firefox's native video controls swallow pointer presses and clicks, so
+a Firefox-only `#preview-pointer-layer` above the picture forwards subject
+drags and clicks to the controller; it leaves the native control bar
+uncovered.
 
 ## Technology
 
@@ -191,9 +196,9 @@ Preserve these unless the user explicitly asks for different behavior:
   subject frame and after the last saved subject frame.
 - While tracking is active, the live crop preview remains visible beyond the
   last saved frame without showing a saved subject box there.
-- Manual subject positions use Chrome's presented-frame `mediaTime`, not only
-  the requested media playhead time. A `New position` must switch both the box
-  and crop on that exact frame. FFmpeg must evaluate the crop before resetting
+- Manual subject positions use the browser's presented-frame `mediaTime`
+  (`requestVideoFrameCallback`), not only the requested media playhead time.
+  A `New position` must switch both the box and crop on that exact frame. FFmpeg must evaluate the crop before resetting
   presentation timestamps.
 - The 9:16 option becomes required and cannot be deselected while subject
   references exist.
@@ -255,8 +260,8 @@ For Svelte markup, CSS, media lifecycle, or editor-controller changes:
 2. Run focused automated or browser tests for the changed workflow when useful.
 3. Run the full `npm run test:e2e` suite before pushing, or when the user
    explicitly requests it; it is not required after every local change.
-4. Load the app in Chrome at the Vite development URL for any behavior not
-   covered by Playwright.
+4. Load the app in Chrome and Firefox at the Vite development URL for any
+   behavior not covered by Playwright.
 5. Confirm the initial page has no console errors.
 6. Upload a small local video and wait for the preparation overlay to clear.
 7. Verify metadata, segment controls, preview controls, and the Cut button.
