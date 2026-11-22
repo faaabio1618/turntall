@@ -20,7 +20,7 @@
           Exports do not include a watermark—the logo or service name that some
           editors place over a finished video. Choose exact start and end
           frames, keep or remove audio, adjust speed, preview the crop, and
-          create the finished video in desktop Chrome or Firefox.
+          create the finished video in desktop Chrome, Firefox, or Safari.
         </p>
       </div>
     </section>
