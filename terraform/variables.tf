@@ -111,7 +111,7 @@ variable "include_www_domain" {
 }
 
 variable "cloudflare_proxy_enabled" {
-  description = "Proxy site records through Cloudflare. DNS-only is recommended because CloudFront already provides the CDN."
+  description = "Proxy site records through Cloudflare. Production has been proxied since October 2026; set false for DNS-only records that point straight at CloudFront."
   type        = bool
-  default     = false
+  default     = true
 }

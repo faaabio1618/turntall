@@ -43,10 +43,11 @@ API token in `terraform.tfvars`, Terraform state, GitHub variables, or a commit.
 
 Terraform creates the ACM validation records first, waits for certificate
 issuance, adds `turntall.com` and `www.turntall.com` to CloudFront, and finally
-creates DNS CNAME records pointing to the distribution. Site records default
-to DNS-only because CloudFront already provides caching and TLS. Set
-`cloudflare_proxy_enabled = true` only if Cloudflare proxying is intentionally
-required.
+creates DNS CNAME records pointing to the distribution. Production site records
+are proxied through Cloudflare (`cloudflare_proxy_enabled = true`, the
+default), which was enabled in the Cloudflare dashboard in October 2026 and is
+now managed here. Set it to `false` for DNS-only records that point straight
+at CloudFront, which already provides caching and TLS.
 
 For GitHub-based infrastructure changes, configure the `production`
 Environment with the `CLOUDFLARE_API_TOKEN` secret and

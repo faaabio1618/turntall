@@ -22,4 +22,4 @@ cloudflare_zone_id = "0123456789abcdef0123456789abcdef"
 
 domain_name             = "turntall.com"
 include_www_domain      = true
-cloudflare_proxy_enabled = false
+cloudflare_proxy_enabled = true
